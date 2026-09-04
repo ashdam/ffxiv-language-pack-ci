@@ -3,6 +3,10 @@ name: "Auto-merge"
 
 on:
   workflow_call:
+    secrets:
+      CI_MERGE_TOKEN:
+        description: "A token of a person: contents write and pull requests write on this repository."
+        required: true
 
 permissions: {}
 
@@ -17,10 +21,12 @@ jobs:
       # Auto-merge, not merge: GitHub lands it only once every required check is green, and only
       # once every required review is in. Which checks and reviews are required is the branch
       # protection rule, so a language gains a lead by changing the rule and not this file.
+      # A person's token, not the workflow token: a merge made with the workflow token starts no
+      # workflow, so the release would never run.
       - name: "Enable auto-merge"
         shell: "bash"
         env:
-          GH_TOKEN: "${{ github.token }}"
+          GH_TOKEN: "${{ secrets.CI_MERGE_TOKEN }}"
           PR: "${{ github.event.pull_request.number }}"
         run: |
           gh pr merge "$PR" --auto --squash --repo "$GITHUB_REPOSITORY"
