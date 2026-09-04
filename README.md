@@ -1,0 +1,39 @@
+# ffxiv-language-pack-ci
+
+The workflows every `ffxiv-language-pack-<code>` repository calls, so there is one copy of each.
+
+| Workflow | Called on | What it does |
+|---|---|---|
+| `validate.yml` | every pull request | Only `corpus/**/*.json` changed, only `target` differs from `main`, valid JSON without BOM or `\u00XX`, no placeholder text, macros a subset of the English row's. Comments the rejected rows on the pull request. |
+| `auto-merge.yml` | every pull request | Enables auto-merge, so the pull request lands the moment `validate` passes. A repository with a language lead makes review required, and the workflow then waits for it. |
+| `release.yml` | every push to `main` | Builds the pack from the corpus and the exported game sheets, and publishes the release. Concurrency per language: two merges in a row publish two releases in order. |
+
+A language repository calls them like this, in its own `.github/workflows/`:
+
+```yaml
+jobs:
+  validate:
+    uses: ashdam/ffxiv-language-pack-ci/.github/workflows/validate.yml@main
+    with:
+      language: it
+    secrets: inherit
+```
+
+## Secrets a language repository needs
+
+| Secret | For |
+|---|---|
+| `CI_READ_TOKEN` | Reading `ffxiv-corpus-en`, `corpus-extractor` and `ffxiv-game-sheets` while any of them is private. A fine-grained token, contents read. |
+
+## Repository settings
+
+- **Allow auto-merge** on, and a branch protection rule on `main` with `validate` as a required
+  status check. Without the rule `gh pr merge --auto` merges at once; without auto-merge it refuses.
+- When the language has a lead: `CODEOWNERS` with `corpus/ @lead` and *require review from code
+  owners* in the same rule.
+
+## What the release runner does not check
+
+The full validator needs the installed game and does not run here. The build's own gates
+run instead: every page is rebuilt byte-identical before anything is substituted, and a row whose
+macros do not survive the round trip is skipped and counted, never guessed at.

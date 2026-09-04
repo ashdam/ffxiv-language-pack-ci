@@ -1,0 +1,131 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Release"
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: "The [target.*] suffix: es-es, it, pt-br, pl."
+        required: true
+        type: string
+    secrets:
+      CI_READ_TOKEN:
+        required: true
+
+permissions: {}
+
+# One release at a time per language, in order: a second merge waits for the first release rather
+# than racing it for the `latest` slot.
+concurrency:
+  group: "release-${{ inputs.language }}"
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: "Build and publish the pack"
+    runs-on: "windows-latest"
+    permissions:
+      contents: "write"
+    steps:
+      # Full history: the release notes list the commits since the previous release's corpusCommit.
+      - name: "Checkout the language repository"
+        uses: "actions/checkout@v4"
+        with:
+          fetch-depth: 0
+          path: "pack"
+
+      - name: "Checkout the English corpus"
+        uses: "actions/checkout@v4"
+        with:
+          repository: "ashdam/ffxiv-corpus-en"
+          path: "corpus-en"
+          token: "${{ secrets.CI_READ_TOKEN }}"
+          persist-credentials: false
+
+      - name: "Checkout the tools"
+        uses: "actions/checkout@v4"
+        with:
+          repository: "ashdam/corpus-extractor"
+          path: "Tools"
+          token: "${{ secrets.CI_READ_TOKEN }}"
+          persist-credentials: false
+
+      # The game's Excel files, exported with `CorpusExtractor --export-sheets` after every patch.
+      - name: "Checkout the game sheets"
+        uses: "actions/checkout@v4"
+        with:
+          repository: "ashdam/ffxiv-game-sheets"
+          path: "game-sheets"
+          token: "${{ secrets.CI_READ_TOKEN }}"
+          persist-credentials: false
+
+      - name: "Set up .NET"
+        uses: "actions/setup-dotnet@v4"
+        with:
+          dotnet-version: "10.0.x"
+
+      # Lumina, the same build Dalamud ships, which the tools reference from a local install.
+      - name: "Fetch Dalamud"
+        shell: "pwsh"
+        run: |
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile "$env:RUNNER_TEMP\dalamud.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\dalamud.zip" -DestinationPath "$env:RUNNER_TEMP\dalamud" -Force
+          "DalamudLibPath=$env:RUNNER_TEMP\dalamud\" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # The runner's tools.ini: the same keys the tools read on a workstation, with the runner's paths.
+      - name: "Write tools.ini"
+        shell: "pwsh"
+        env:
+          LANGUAGE: "${{ inputs.language }}"
+        run: |
+          $ws = $env:GITHUB_WORKSPACE
+          $upper = $env:LANGUAGE.ToUpperInvariant()
+          $ini = @(
+            '[common]',
+            "game   = $ws\game-sheets",
+            "source = $ws\corpus-en",
+            '',
+            "[target.$env:LANGUAGE]",
+            "dir = $ws\pack",
+            "out = $ws\build\Gubal Library ($upper)",
+            '',
+            '[CorpusExtractor]',
+            "excluded = $ws\Tools\excluded-rows.json",
+            '',
+            '[PackBuilder]',
+            "inventory = $ws\Tools\LocalizationKit\LocalizationKit.csproj",
+            '',
+            '[Promote]',
+            "shared = $ws\shared",
+            '',
+            '[WebIcons]',
+            "web = $ws\web"
+          )
+          Set-Content -Path "$ws\Tools\tools.ini" -Value $ini -Encoding utf8
+          New-Item -ItemType Directory -Force "$ws\build" | Out-Null
+
+      # A corpus behind the game is not built: the plugin would refuse the pack by gameVersion, and
+      # a page built against other rows would be worse than a refusal.
+      - name: "Check the corpus is in step with the game"
+        shell: "pwsh"
+        env:
+          LANGUAGE: "${{ inputs.language }}"
+        run: |
+          dotnet run --project Tools/CorpusExtractor -c Release -- --language $env:LANGUAGE --sync-target --dry-run --strict
+          if ($LASTEXITCODE -ne 0) { throw "The corpus needs a sync before it can be released." }
+
+      - name: "Build the pack"
+        shell: "pwsh"
+        env:
+          LANGUAGE: "${{ inputs.language }}"
+        run: |
+          Tools/build-pack.ps1 -Language $env:LANGUAGE
+          if ($LASTEXITCODE -ne 0) { throw "The build stopped." }
+
+      - name: "Publish the release"
+        shell: "pwsh"
+        env:
+          LANGUAGE: "${{ inputs.language }}"
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          Tools/publish-pack.ps1 -Language $env:LANGUAGE

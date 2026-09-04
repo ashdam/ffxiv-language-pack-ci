@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Auto-merge"
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  enable:
+    name: "Merge when the checks pass"
+    runs-on: "ubuntu-latest"
+    permissions:
+      contents: "write"
+      pull-requests: "write"
+    steps:
+      # Auto-merge, not merge: GitHub lands it only once every required check is green, and only
+      # once every required review is in. Which checks and reviews are required is the branch
+      # protection rule, so a language gains a lead by changing the rule and not this file.
+      - name: "Enable auto-merge"
+        shell: "bash"
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          PR: "${{ github.event.pull_request.number }}"
+        run: |
+          gh pr merge "$PR" --auto --squash --repo "$GITHUB_REPOSITORY"

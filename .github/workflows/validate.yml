@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: "Validate"
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: "The [target.*] suffix: es-es, it, pt-br, pl."
+        required: true
+        type: string
+    secrets:
+      CI_READ_TOKEN:
+        required: false
+
+permissions: {}
+
+jobs:
+  validate:
+    name: "Validate the changed rows"
+    runs-on: "ubuntu-latest"
+    permissions:
+      contents: "read"
+      pull-requests: "write"
+    steps:
+      - name: "Checkout the pull request"
+        uses: "actions/checkout@v4"
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: "Checkout the workflow scripts"
+        uses: "actions/checkout@v4"
+        with:
+          repository: "ashdam/ffxiv-language-pack-ci"
+          path: ".ci"
+          persist-credentials: false
+
+      # The English rows the macro check compares against. Shallow: the history is not needed.
+      - name: "Checkout the English corpus"
+        uses: "actions/checkout@v4"
+        with:
+          repository: "ashdam/ffxiv-corpus-en"
+          path: ".corpus-en"
+          token: "${{ secrets.CI_READ_TOKEN || github.token }}"
+          persist-credentials: false
+
+      - name: "Check the rows"
+        shell: "pwsh"
+        env:
+          BASE_SHA: "${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+        run: |
+          .ci/scripts/Validate-Pr.ps1 -Base $env:BASE_SHA -Head $env:HEAD_SHA -Source .corpus-en -Report validate-report.md
+
+      - name: "Comment the result"
+        if: "always() && github.event_name == 'pull_request'"
+        shell: "bash"
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          PR: "${{ github.event.pull_request.number }}"
+        run: |
+          if [ -s validate-report.md ]; then
+            gh pr comment "$PR" --body-file validate-report.md --repo "$GITHUB_REPOSITORY"
+          fi
