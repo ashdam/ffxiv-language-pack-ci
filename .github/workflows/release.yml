@@ -134,15 +134,18 @@ jobs:
         run: |
           Tools/publish-pack.ps1 -Language $env:LANGUAGE
 
-      # The build writes coverage.json into the language repository; the web reads it from there.
-      # Committed with a person's token: the workflow token cannot pass the branch rule. The file is
-      # outside the paths that start a release, so this push starts none.
+      # The build leaves the coverage document beside the archive; it goes into the language
+      # repository as coverage.json, where the web reads it. Committed with a person's token: the
+      # workflow token cannot pass the branch rule. The file is outside the paths that start a
+      # release, so this push starts none.
       - name: "Commit the coverage"
         shell: "bash"
         working-directory: "pack"
         env:
           TOKEN: "${{ secrets.CI_MERGE_TOKEN }}"
+          LANGUAGE: "${{ inputs.language }}"
         run: |
+          cp "../build/ffxiv-language-pack-${LANGUAGE}.coverage.json" coverage.json
           if git diff --quiet -- coverage.json && [ -n "$(git ls-files coverage.json)" ]; then
             echo "coverage.json unchanged"
             exit 0
