@@ -23,7 +23,7 @@ concurrency:
 jobs:
   release:
     name: "Build and publish the pack"
-    runs-on: "windows-latest"
+    runs-on: "ubuntu-latest"
     permissions:
       contents: "write"
     steps:
@@ -73,11 +73,11 @@ jobs:
         env:
           DALAMUD_SHA256: "94f3e4050237b4b9d85ad55ca3cacb8547f337745fb28a4a882834f148a217be"
         run: |
-          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile "$env:RUNNER_TEMP\dalamud.zip"
-          $hash = (Get-FileHash "$env:RUNNER_TEMP\dalamud.zip" -Algorithm SHA256).Hash.ToLower()
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile "$env:RUNNER_TEMP/dalamud.zip"
+          $hash = (Get-FileHash "$env:RUNNER_TEMP/dalamud.zip" -Algorithm SHA256).Hash.ToLower()
           if ($hash -ne $env:DALAMUD_SHA256) { throw "Dalamud archive hash $hash is not the pinned one. Check the Dalamud release, then update DALAMUD_SHA256." }
-          Expand-Archive -Path "$env:RUNNER_TEMP\dalamud.zip" -DestinationPath "$env:RUNNER_TEMP\dalamud" -Force
-          "DalamudLibPath=$env:RUNNER_TEMP\dalamud\" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Expand-Archive -Path "$env:RUNNER_TEMP/dalamud.zip" -DestinationPath "$env:RUNNER_TEMP/dalamud" -Force
+          "DalamudLibPath=$env:RUNNER_TEMP/dalamud/" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # The runner's tools.ini: the same keys the tools read on a workstation, with the runner's paths.
       - name: "Write tools.ini"
@@ -89,21 +89,21 @@ jobs:
           $upper = $env:LANGUAGE.ToUpperInvariant()
           $ini = @(
             '[common]',
-            "game   = $ws\game-sheets",
-            "source = $ws\corpus-en",
+            "game   = $ws/game-sheets",
+            "source = $ws/corpus-en",
             '',
             "[target.$env:LANGUAGE]",
-            "dir = $ws\pack",
-            "out = $ws\build\Gubal Library ($upper)",
+            "dir = $ws/pack",
+            "out = $ws/build/Gubal Library ($upper)",
             '',
             '[CorpusExtractor]',
-            "excluded = $ws\Tools\excluded-rows.json",
+            "excluded = $ws/Tools/excluded-rows.json",
             '',
             '[PackBuilder]',
-            "inventory = $ws\Tools\LocalizationKit\LocalizationKit.csproj"
+            "inventory = $ws/Tools/LocalizationKit/LocalizationKit.csproj"
           )
-          Set-Content -Path "$ws\Tools\tools.ini" -Value $ini -Encoding utf8
-          New-Item -ItemType Directory -Force "$ws\build" | Out-Null
+          Set-Content -Path "$ws/Tools/tools.ini" -Value $ini -Encoding utf8
+          New-Item -ItemType Directory -Force "$ws/build" | Out-Null
 
       # A corpus behind the game is not built: the plugin would refuse the pack by gameVersion, and
       # a page built against other rows would be worse than a refusal.
