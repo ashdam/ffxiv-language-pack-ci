@@ -22,14 +22,17 @@ jobs:
       contents: "read"
       pull-requests: "write"
     steps:
+      # Actions pinned by commit: a tag can be moved, a commit cannot.
+      # The pull request is checked out as data. Nothing in it is executed: the script comes from
+      # this repository.
       - name: "Checkout the pull request"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: "Checkout the workflow scripts"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
           repository: "ashdam/ffxiv-language-pack-ci"
           path: ".ci"
@@ -37,7 +40,7 @@ jobs:
 
       # The English rows the macro check compares against. Shallow: the history is not needed.
       - name: "Checkout the English corpus"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
           repository: "ashdam/ffxiv-corpus-en"
           path: ".corpus-en"
@@ -52,8 +55,16 @@ jobs:
         run: |
           .ci/scripts/Validate-Pr.ps1 -Base $env:BASE_SHA -Head $env:HEAD_SHA -Source .corpus-en -Report validate-report.md
 
+      # The summary shows on every run. The comment needs a write token, which a fork's run does not get.
+      - name: "Report the result"
+        if: "always()"
+        shell: "bash"
+        run: |
+          if [ -s validate-report.md ]; then cat validate-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+
       - name: "Comment the result"
         if: "always() && github.event_name == 'pull_request'"
+        continue-on-error: true
         shell: "bash"
         env:
           GH_TOKEN: "${{ github.token }}"

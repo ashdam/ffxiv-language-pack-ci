@@ -38,3 +38,10 @@ jobs:
 The full validator needs the installed game and does not run here. The build's own gates
 run instead: every page is rebuilt byte-identical before anything is substituted, and a row whose
 macros do not survive the round trip is skipped and counted, never guessed at.
+
+## What the workflows may do
+
+- The workflow token starts with no permissions; each job asks for what it needs: `validate` reads contents and writes a comment, `release` writes contents, `auto-merge` writes contents and pull requests.
+- Nothing from a pull request is executed. `validate` reads its files as data and runs the script from this repository; `auto-merge` checks nothing out.
+- Every action is pinned by commit, and the Dalamud archive by hash. A Dalamud update needs the new hash in `release.yml`.
+- Checkouts keep no credentials. The tokens live in the language repository's secrets and reach the logs only masked.

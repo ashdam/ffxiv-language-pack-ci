@@ -27,15 +27,17 @@ jobs:
     permissions:
       contents: "write"
     steps:
+      # Actions pinned by commit: a tag can be moved, a commit cannot.
       # Full history: the release notes list the commits since the previous release's corpusCommit.
       - name: "Checkout the language repository"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
           fetch-depth: 0
           path: "pack"
+          persist-credentials: false
 
       - name: "Checkout the English corpus"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
           repository: "ashdam/ffxiv-corpus-en"
           path: "corpus-en"
@@ -43,7 +45,7 @@ jobs:
           persist-credentials: false
 
       - name: "Checkout the tools"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
           repository: "ashdam/corpus-extractor"
           path: "Tools"
@@ -52,7 +54,7 @@ jobs:
 
       # The game's Excel files, exported with `CorpusExtractor --export-sheets` after every patch.
       - name: "Checkout the game sheets"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
           repository: "ashdam/ffxiv-game-sheets"
           path: "game-sheets"
@@ -60,15 +62,20 @@ jobs:
           persist-credentials: false
 
       - name: "Set up .NET"
-        uses: "actions/setup-dotnet@v4"
+        uses: "actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9" # v4
         with:
           dotnet-version: "10.0.x"
 
       # Lumina, the same build Dalamud ships, which the tools reference from a local install.
+      # The archive must match the pinned hash. After a Dalamud update, put the new hash here.
       - name: "Fetch Dalamud"
         shell: "pwsh"
+        env:
+          DALAMUD_SHA256: "94f3e4050237b4b9d85ad55ca3cacb8547f337745fb28a4a882834f148a217be"
         run: |
           Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile "$env:RUNNER_TEMP\dalamud.zip"
+          $hash = (Get-FileHash "$env:RUNNER_TEMP\dalamud.zip" -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:DALAMUD_SHA256) { throw "Dalamud archive hash $hash is not the pinned one. Check the Dalamud release, then update DALAMUD_SHA256." }
           Expand-Archive -Path "$env:RUNNER_TEMP\dalamud.zip" -DestinationPath "$env:RUNNER_TEMP\dalamud" -Force
           "DalamudLibPath=$env:RUNNER_TEMP\dalamud\" | Out-File -FilePath $env:GITHUB_ENV -Append
 
@@ -93,13 +100,7 @@ jobs:
             "excluded = $ws\Tools\excluded-rows.json",
             '',
             '[PackBuilder]',
-            "inventory = $ws\Tools\LocalizationKit\LocalizationKit.csproj",
-            '',
-            '[Promote]',
-            "shared = $ws\shared",
-            '',
-            '[WebIcons]',
-            "web = $ws\web"
+            "inventory = $ws\Tools\LocalizationKit\LocalizationKit.csproj"
           )
           Set-Content -Path "$ws\Tools\tools.ini" -Value $ini -Encoding utf8
           New-Item -ItemType Directory -Force "$ws\build" | Out-Null
