@@ -48,12 +48,12 @@ jobs:
           persist-credentials: false
 
       - name: "Check the rows"
-        shell: "pwsh"
+        shell: "bash"
         env:
           BASE_SHA: "${{ github.event.pull_request.base.sha }}"
           HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
         run: |
-          .ci/scripts/Validate-Pr.ps1 -Base $env:BASE_SHA -Head $env:HEAD_SHA -Source .corpus-en -Report validate-report.md
+          bash .ci/scripts/validate-pr.sh "$BASE_SHA" "$HEAD_SHA" .corpus-en validate-report.md
 
       # The summary shows on every run. The comment needs a write token, which a fork's run does not get.
       - name: "Report the result"
