@@ -23,7 +23,7 @@ jobs:
 
 | Secret | For |
 |---|---|
-| `CI_READ_TOKEN` | Reading `ffxiv-corpus-en`, `corpus-extractor` and `ffxiv-game-sheets` while any of them is private. A fine-grained token, contents read. |
+| `CI_READ_TOKEN` | Reading the private repositories the release clones: the build tools and the game sheets. A fine-grained token, contents read. |
 | `CI_MERGE_TOKEN` | Enabling auto-merge as a person. A fine-grained token on the language repository: contents write, pull requests write. The workflow token cannot be used: a merge it makes starts no workflow, so the release would never run. |
 
 ## Repository settings

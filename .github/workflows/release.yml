@@ -11,6 +11,9 @@ on:
     secrets:
       CI_READ_TOKEN:
         required: true
+      CI_MERGE_TOKEN:
+        description: "A token of a person with write on this repository: commits coverage.json after the release."
+        required: true
 
 permissions: {}
 
@@ -130,3 +133,22 @@ jobs:
           GH_TOKEN: "${{ github.token }}"
         run: |
           Tools/publish-pack.ps1 -Language $env:LANGUAGE
+
+      # The build writes coverage.json into the language repository; the web reads it from there.
+      # Committed with a person's token: the workflow token cannot pass the branch rule. The file is
+      # outside the paths that start a release, so this push starts none.
+      - name: "Commit the coverage"
+        shell: "bash"
+        working-directory: "pack"
+        env:
+          TOKEN: "${{ secrets.CI_MERGE_TOKEN }}"
+        run: |
+          if git diff --quiet -- coverage.json && [ -n "$(git ls-files coverage.json)" ]; then
+            echo "coverage.json unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -m "coverage.json"
+          git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
