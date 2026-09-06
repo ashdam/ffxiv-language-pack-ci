@@ -10,7 +10,9 @@
 #   - The header, each gameKey, each hash and the row order are the same as in main.
 #     Only `target` can change.
 #   - A target is not a placeholder.
-#   - The macros <...> in a target are a subset of the macros in the English row.
+#   - The macros <...> in a target are a subset of the macros in the English row, plus the
+#     `<if(gnum4,...)>` a gendered language has to add. `\<...>` is text, not a macro.
+#   - A comma inside an <if(...)> branch is escaped.
 #
 # <source-dir>/corpus mirrors corpus/ in the repository. Exit code 1 and a report when a check
 # fails. Exit code 0 and no report when all checks pass. Needs git and jq.
@@ -64,7 +66,14 @@ while IFS=$'\t' read -r status path_a path_b; do
     continue
   fi
 
-  if ! error=$(jq empty "$after" 2>&1); then
+  # A glossary file carries `//` comment lines and is JSONC. A corpus file never does.
+  parsed=$after
+  if [[ $path == glossary/* ]]; then
+    parsed=$work/parsed.json
+    sed 's|^[[:space:]]*//.*$||' "$after" > "$parsed"
+  fi
+
+  if ! error=$(jq empty "$parsed" 2>&1); then
     problems+=("\`$path\`: is not valid JSON: ${error#jq: }")
     continue
   fi
@@ -104,8 +113,15 @@ while IFS=$'\t' read -r status path_a path_b; do
     esac
   done < <(jq -r -n --slurpfile b "$before" --slurpfile a "$after" --slurpfile e "$english" \
       --arg path "$path" --arg placeholder "$placeholder" '
-    def macros: [scan("<([A-Za-z]+)") | .[0]];
+    # A `\<...>` is escaped text, not a macro: the emotes are translated and must not be counted.
+    def macros: [scan("(?<![\\\\])<([A-Za-z]+)") | .[0]];
     def counts: group_by(.) | map({name: .[0], n: length});
+    # A gendered language has to add `<if(gnum4,...)>` where the English needs no macro at all.
+    def gendered: [scan("(?<![\\\\])<if\\(gnum4,")] | length;
+    # Only the comma between the two branches may be bare: the game reads a second one as another
+    # argument and drops the rest of the line.
+    def loose_commas: [ scan("(?<![\\\\])<if\\((?:\\[[^\\]]*\\]|[A-Za-z0-9]+),([^<>()]*)\\)>") | .[0] ]
+      | map(select((gsub("\\\\,"; "") | [scan(",")] | length) != 1)) | length;
     (($e[0].entries // []) | map({key: .gameKey, value: (if (.macro // "") != "" then .macro else .en end)}) | from_entries) as $en
     | [range(0; $a[0].entries | length) as $i
         | $b[0].entries[$i] as $old | $a[0].entries[$i] as $new
@@ -117,14 +133,23 @@ while IFS=$'\t' read -r status path_a path_b; do
             + ( if ($old.target // "") == ($new.target // "") then []
                 else ($new.target // "") as $target
                   | [["C", ""]]
-                  + ( if ($target | test($placeholder)) then
+                  + ( if ($target | test($placeholder)) and $target != $en[$new.gameKey] then
                         [["P", "`\($path)` `\($new.gameKey)`: `\($target)` is a placeholder, not a translation. Leave `target` empty until it is translated."]]
                       elif ($target | length) == 0 or $en[$new.gameKey] == null then []
                       else ($en[$new.gameKey] | macros | counts) as $wanted
+                        | ($target | gendered) as $added
                         | [ ($target | macros | counts)[] as $macro
                             | ([$wanted[] | select(.name == $macro.name) | .n] | add // 0) as $allowed
-                            | select($macro.n > $allowed)
+                            # An added gender macro repeats whatever the sentence already carried,
+                            # once per branch, so each English macro may appear once more per branch.
+                            | ($allowed * (1 + $added)) as $repeated
+                            | (if $macro.name == "if" then $repeated + $added else $repeated end) as $budget
+                            | select($macro.n > $budget)
                             | ["P", "`\($path)` `\($new.gameKey)`: uses the macro `<\($macro.name)...>` \($macro.n) time(s); the English row has it \($allowed) time(s)."] ]
+                        + ( ($target | loose_commas) as $loose
+                            | if $loose > 0 then
+                                [["P", "`\($path)` `\($new.gameKey)`: \($loose) `<if(...)>` branch(es) hold a bare comma; write it `\\,` or the game reads another argument and drops the rest of the line."]]
+                              else [] end )
                       end )
                 end )
           end ]

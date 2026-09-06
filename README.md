@@ -4,7 +4,7 @@ The workflows every `ffxiv-language-pack-<code>` repository calls, so there is o
 
 | Workflow | Called on | What it does |
 |---|---|---|
-| `validate.yml` | every pull request | Only `corpus/**/*.json` changed, only `target` differs from `main`, valid JSON without BOM or `\u00XX`, no placeholder text, macros a subset of the English row's. Comments the rejected rows on the pull request. |
+| `validate.yml` | every pull request | Only `corpus/**/*.json` changed, only `target` differs from `main`, valid JSON without BOM or `\u00XX`, no placeholder text, macros a subset of the English row's plus the `<if(gnum4,...)>` a gendered language adds, commas escaped inside an `<if>` branch. Comments the rejected rows on the pull request. |
 | `auto-merge.yml` | every pull request | Enables auto-merge, so the pull request lands the moment `validate` passes. A repository with a language lead makes review required, and the workflow then waits for it. |
 | `release.yml` | every push to `main` | Builds the pack from the corpus and the exported game sheets, and publishes the release. Concurrency per language: two merges in a row publish two releases in order. |
 
