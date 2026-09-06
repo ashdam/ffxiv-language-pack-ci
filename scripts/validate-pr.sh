@@ -5,6 +5,7 @@
 #
 # The checks:
 #   - Only .json files under corpus/ and glossary/ can change. No file is added or removed.
+#   - A font under fonts/ may be added or replaced. It is a binary and has no further checks.
 #   - A file is UTF-8 without BOM. Line ends are LF. The JSON is valid. No \u00XX escapes.
 #   - A glossary file has no more checks. The checks below apply to corpus rows.
 #   - The header, each gameKey, each hash and the row order are the same as in main.
@@ -38,8 +39,19 @@ while IFS=$'\t' read -r status path_a path_b; do
   kind=${status:0:1}
   path=${path_b:-$path_a}
 
+  # A font is a binary the pack serves as it is: it may be added or replaced, and nothing here can
+  # read inside it. Everything else is a corpus or glossary .json.
+  if [[ $path =~ ^fonts/[^/]+\.(fdt|tex)$ ]]; then
+    if [ "$kind" = D ]; then
+      problems+=("\`$path\`: a font is not removed by hand; the pack serves whatever \`fonts/\` holds.")
+      continue
+    fi
+    changed_files=$((changed_files + 1))
+    continue
+  fi
+
   if ! [[ $path =~ ^(corpus/.+|glossary/[^/]+)\.json$ ]]; then
-    problems+=("\`$path\`: only .json files under \`corpus/\` and \`glossary/\` change in a pull request.")
+    problems+=("\`$path\`: only .json files under \`corpus/\` and \`glossary/\`, or a font under \`fonts/\`, change in a pull request.")
     continue
   fi
 
