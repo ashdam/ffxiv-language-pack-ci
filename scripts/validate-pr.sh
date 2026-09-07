@@ -4,7 +4,7 @@
 #   validate-pr.sh <base> <head> <source-dir> <report> [repo]
 #
 # The checks:
-#   - Only .json files under corpus/ and glossary/ can change. No file is added or removed.
+#   - Only .json files under corpus/ and glossary/ can change. New corpus files must match the source.
 #   - A font under fonts/ may be added or replaced. It is a binary and has no further checks.
 #   - A file is UTF-8 without BOM. Line ends are LF. The JSON is valid. No \u00XX escapes.
 #   - A glossary file has no more checks. The checks below apply to corpus rows.
@@ -55,8 +55,8 @@ while IFS=$'\t' read -r status path_a path_b; do
     continue
   fi
 
-  if [ "$kind" != M ]; then
-    problems+=("\`$path\`: files are not added, removed or renamed by hand; the sync against the game does that.")
+  if [ "$kind" != M ] && ! { [ "$kind" = A ] && [[ $path == corpus/* ]]; }; then
+    problems+=("\`$path\`: only source-backed corpus files can be added; files cannot be removed or renamed.")
     continue
   fi
 
@@ -97,7 +97,21 @@ while IFS=$'\t' read -r status path_a path_b; do
   fi
 
   before=$work/before.json
-  git -C "$repo" show "$base:$path" > "$before"
+  if [ "$kind" = A ]; then
+    english=$source/$path
+    if [ ! -f "$english" ]; then
+      problems+=("\`$path\`: a new corpus file must exist in the English source. Merge the source sync first.")
+      continue
+    fi
+    # Use the source's target schema as the baseline for a new synchronized sheet.
+    if ! jq -e '{conversation, gameVersion, entries: [.entries[] | {gameKey, hash, target: ""}]}' \
+        "$english" > "$before"; then
+      problems+=("\`$path\`: cannot read the English source rows.")
+      continue
+    fi
+  else
+    git -C "$repo" show "$base:$path" > "$before"
+  fi
 
   while IFS= read -r key; do
     problems+=("\`$path\`: the header field \`$key\` changed; only \`target\` changes in a pull request.")
