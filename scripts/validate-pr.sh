@@ -113,9 +113,9 @@ while IFS=$'\t' read -r status path_a path_b; do
     continue
   fi
 
-  # A sync may change metadata only to the exact current source projection.
+  # Ignore the unused root questName field when comparing metadata.
   if ! jq -e -n --slurpfile b "$before" --slurpfile a "$after" '
-    def metadata: .entries |= map(del(.target));
+    def metadata: del(.questName) | .entries |= map(del(.target));
     ($b[0] | metadata) == ($a[0] | metadata)
   ' > /dev/null; then
     if [ ! -f "$english" ]; then
@@ -123,9 +123,15 @@ while IFS=$'\t' read -r status path_a path_b; do
       continue
     fi
     synced=$work/synced.json
-    if ! jq -e --arg path "$path" --slurpfile b "$before" '
+    if ! jq -e --arg path "$path" --slurpfile b "$before" --slurpfile a "$after" '
       ($b[0].entries | map({key: .gameKey, value: .}) | from_entries) as $old
-      | (if $path | startswith("corpus/flat/") then {sheet: .conversation}
+      | (.entries | map({key: .gameKey, value: .}) | from_entries) as $source
+      | ($b[0].entries | map(.gameKey)) as $order
+      | if $order == ($a[0].entries | map(.gameKey))
+           and ($order | sort) == (.entries | map(.gameKey) | sort)
+        then .entries = [$order[] | $source[.]] else . end
+      | ($b[0] | del(.entries, .gameVersion, .conversation, .sheet, .questName))
+        + (if $path | startswith("corpus/flat/") then {sheet: .conversation}
          else {conversation} end) + {gameVersion, entries: [.entries[] |
            . as $row | {gameKey, hash, target:
              (if $old[$row.gameKey].hash == $row.hash
@@ -135,10 +141,10 @@ while IFS=$'\t' read -r status path_a path_b; do
       continue
     fi
     if ! jq -e -n --slurpfile s "$synced" --slurpfile a "$after" '
-      def metadata: .entries |= map(del(.target));
+      def metadata: del(.questName) | .entries |= map(del(.target));
       ($s[0] | metadata) == ($a[0] | metadata)
     ' > /dev/null; then
-      problems+=("\`$path\`: changed metadata must match the English source header, row order, keys and hashes exactly.")
+      problems+=("\`$path\`: a sync must match the English version, keys and hashes, keep other existing header fields, and use the existing or source row order.")
       continue
     fi
     cp "$synced" "$before"

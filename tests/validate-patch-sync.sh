@@ -8,7 +8,7 @@ git -C "$work/repo" init -q
 git -C "$work/repo" config user.name Test
 git -C "$work/repo" config user.email test@example.invalid
 cat > "$work/repo/corpus/flat/Action.json" <<'JSON'
-{"sheet":"Action","gameVersion":"1","entries":[{"gameKey":"Action#1","hash":"old","target":"<br>"},{"gameKey":"Action#2","hash":"retired","target":"Retired"}]}
+{"sheet":"Action","questName":"Existing label","gameVersion":"1","entries":[{"gameKey":"Action#1","hash":"old","target":"<br>"},{"gameKey":"Action#2","hash":"retired","target":"Retired"}]}
 JSON
 git -C "$work/repo" add -A
 git -C "$work/repo" commit -qm base
@@ -16,7 +16,7 @@ base=$(git -C "$work/repo" rev-parse HEAD)
 cat > "$work/source/corpus/flat/Action.json" <<'JSON'
 {"schemaVersion":2,"sourceLanguage":"en","conversation":"Action","gameVersion":"2","entries":[{"gameKey":"Action#1","hash":"new","en":"Hello"},{"gameKey":"Action#3","hash":"added","en":"Bye"}]}
 JSON
-jq '{sheet: .conversation, gameVersion, entries: [.entries[] | {gameKey, hash, target: "Hola"}]}' \
+jq '{sheet: .conversation, questName: "Existing label", gameVersion, entries: [.entries[] | {gameKey, hash, target: "Hola"}]}' \
   "$work/source/corpus/flat/Action.json" > "$work/valid.json"
 check() {
   local expected=$1 label=$2 result=0
@@ -41,6 +41,7 @@ for change in \
   '.gameVersion = "1"' \
   '.sheet = "Wrong"' \
   '.extra = "unexpected"' \
+  '.entries[0].questName = "Unexpected row field"' \
   '.entries[0].target = 12' \
   '.entries[0].target = "<br>"' \
   '.entries[0].target = "TODO"'; do
@@ -63,3 +64,28 @@ JSON
 jq '{conversation, gameVersion, entries: [.entries[] | {gameKey, hash, target: "Hola"}]}' \
   "$work/source/corpus/quest/New.json" > "$work/repo/corpus/quest/New.json"
 check 0 'new quest keeps the conversation header'
+
+cat > "$work/source/corpus/quest/Legacy.json" <<'JSON'
+{"conversation":"quest/Legacy","gameVersion":"3","entries":[{"gameKey":"Legacy#1","hash":"one","en":"One"},{"gameKey":"Legacy#2","hash":"two","en":"Two"},{"gameKey":"Legacy#3","hash":"three","en":"Three"}]}
+JSON
+jq '{conversation, questName: "Existing quest", gameVersion: "2", entries: [.entries[] | {gameKey, hash, target: "Hola"}] | reverse}' \
+  "$work/source/corpus/quest/Legacy.json" > "$work/repo/corpus/quest/Legacy.json"
+git -C "$work/repo" add -A
+git -C "$work/repo" commit -qm baseline
+base=$(git -C "$work/repo" rev-parse HEAD)
+jq '.gameVersion = "3"' "$work/repo/corpus/quest/Legacy.json" > "$work/legacy.json"
+cp "$work/legacy.json" "$work/repo/corpus/quest/Legacy.json"
+check 0 'version sync preserves an existing quest name and row order'
+for change in '.questName = "Changed quest"' 'del(.questName)'; do
+  jq "$change" "$work/legacy.json" > "$work/repo/corpus/quest/Legacy.json"
+  check 0 "unused quest header: $change"
+done
+for change in \
+  '.entries = [.entries[1], .entries[2], .entries[0]]' \
+  '.entries[0].hash = "invented"' \
+  '.entries |= .[:2]'; do
+  jq "$change" "$work/legacy.json" > "$work/repo/corpus/quest/Legacy.json"
+  check 1 "legacy: $change"
+done
+jq '.entries |= reverse' "$work/legacy.json" > "$work/repo/corpus/quest/Legacy.json"
+check 0 'sync may adopt the exact source order'
