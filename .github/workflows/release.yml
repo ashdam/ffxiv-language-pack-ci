@@ -74,7 +74,7 @@ jobs:
       - name: "Fetch Dalamud"
         shell: "pwsh"
         env:
-          DALAMUD_SHA256: "94f3e4050237b4b9d85ad55ca3cacb8547f337745fb28a4a882834f148a217be"
+          DALAMUD_SHA256: "c947e8965c2eea491f657d2a21a4ed61da6cc0913a68d4804a744dba391c6661"
         run: |
           Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile "$env:RUNNER_TEMP/dalamud.zip"
           $hash = (Get-FileHash "$env:RUNNER_TEMP/dalamud.zip" -Algorithm SHA256).Hash.ToLower()
