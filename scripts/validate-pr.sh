@@ -8,8 +8,7 @@
 #   - A font under fonts/ may be added or replaced. It is a binary and has no further checks.
 #   - A file is UTF-8 without BOM. Line ends are LF. The JSON is valid. No \u00XX escapes.
 #   - A glossary file has no more checks. The checks below apply to corpus rows.
-#   - The header, each gameKey, each hash and the row order are the same as in main.
-#     Only `target` can change.
+#   - Metadata stays as in main or matches the current English source exactly.
 #   - A target is not a placeholder.
 #   - The macros <...> in a target are a subset of the macros in the English row, plus the
 #     `<if(gnum4,...)>` a gendered language has to add. `\<...>` is text, not a macro.
@@ -97,33 +96,52 @@ while IFS=$'\t' read -r status path_a path_b; do
   fi
 
   before=$work/before.json
+  english=$source/$path
   if [ "$kind" = A ]; then
-    english=$source/$path
-    if [ ! -f "$english" ]; then
-      problems+=("\`$path\`: a new corpus file must exist in the English source. Merge the source sync first.")
-      continue
-    fi
-    # Use the source's target schema as the baseline for a new synchronized sheet.
-    if ! jq -e '{conversation, gameVersion, entries: [.entries[] | {gameKey, hash, target: ""}]}' \
-        "$english" > "$before"; then
-      problems+=("\`$path\`: cannot read the English source rows.")
-      continue
-    fi
+    printf '{"entries":[]}\n' > "$before"
   else
     git -C "$repo" show "$base:$path" > "$before"
   fi
 
-  while IFS= read -r key; do
-    problems+=("\`$path\`: the header field \`$key\` changed; only \`target\` changes in a pull request.")
-  done < <(jq -r -n --slurpfile b "$before" --slurpfile a "$after" '
-    ($b[0] | del(.entries)) as $old | ($a[0] | del(.entries)) as $new
-    | (($old | keys) + ($new | keys) | unique)[] | select($old[.] != $new[.])')
-
-  count_before=$(jq '.entries | length' "$before")
-  count_after=$(jq '.entries | length' "$after")
-  if [ "$count_before" != "$count_after" ]; then
-    problems+=("\`$path\`: has $count_after rows where main has $count_before; rows are neither added nor removed.")
+  if ! jq -e '
+    type == "object" and (.entries | type == "array")
+    and all(.entries[]; type == "object" and (.gameKey | type == "string")
+      and (.hash | type == "string") and (.target | type == "string"))
+    and (([.entries[].gameKey] | unique | length) == (.entries | length))
+  ' "$after" > /dev/null; then
+    problems+=("\`$path\`: invalid corpus rows or duplicate gameKey.")
     continue
+  fi
+
+  # A sync may change metadata only to the exact current source projection.
+  if ! jq -e -n --slurpfile b "$before" --slurpfile a "$after" '
+    def metadata: .entries |= map(del(.target));
+    ($b[0] | metadata) == ($a[0] | metadata)
+  ' > /dev/null; then
+    if [ ! -f "$english" ]; then
+      problems+=("\`$path\`: a corpus sync needs the English source. Merge the source sync first.")
+      continue
+    fi
+    synced=$work/synced.json
+    if ! jq -e --arg path "$path" --slurpfile b "$before" '
+      ($b[0].entries | map({key: .gameKey, value: .}) | from_entries) as $old
+      | (if $path | startswith("corpus/flat/") then {sheet: .conversation}
+         else {conversation} end) + {gameVersion, entries: [.entries[] |
+           . as $row | {gameKey, hash, target:
+             (if $old[$row.gameKey].hash == $row.hash
+              then ($old[$row.gameKey].target // "") else "" end)}]}
+    ' "$english" > "$synced"; then
+      problems+=("\`$path\`: cannot read the English source rows.")
+      continue
+    fi
+    if ! jq -e -n --slurpfile s "$synced" --slurpfile a "$after" '
+      def metadata: .entries |= map(del(.target));
+      ($s[0] | metadata) == ($a[0] | metadata)
+    ' > /dev/null; then
+      problems+=("\`$path\`: changed metadata must match the English source header, row order, keys and hashes exactly.")
+      continue
+    fi
+    cp "$synced" "$before"
   fi
 
   # The English rows of the same file, by gameKey, for the macro check. No file: no macro check.

@@ -1,0 +1,24 @@
+name: "Test validation"
+
+on:
+  pull_request:
+    paths: ["scripts/**", "tests/**", ".github/workflows/test.yml"]
+  push:
+    branches: ["main"]
+    paths: ["scripts/**", "tests/**", ".github/workflows/test.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: "Check validation rules"
+        run: |
+          bash -n scripts/validate-pr.sh
+          bash tests/validate-new-sheets.sh
+          bash tests/validate-patch-sync.sh
