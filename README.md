@@ -4,7 +4,7 @@ The workflows every `ffxiv-language-pack-<code>` repository calls, so there is o
 
 | Workflow | Called on | What it does |
 |---|---|---|
-| `validate.yml` | every pull request | Checks translation edits and source-backed patch syncs. Row metadata must match `main` or the current English source, and existing descriptive headers stay unchanged; targets must pass the JSON, placeholder and macro checks. Reports rejected rows on the pull request. |
+| `validate.yml` | every pull request | Checks translation edits and source-backed patch syncs. Row metadata must match `main` or the current English source, with the unused root `questName` field excluded from this comparison; targets must pass the JSON, placeholder and macro checks. Reports rejected rows on the pull request. |
 | `auto-merge.yml` | every pull request | Enables auto-merge, so the pull request lands the moment `validate` passes. A repository with a language lead makes review required, and the workflow then waits for it. |
 | `release.yml` | every push to `main` | Builds the pack from the corpus and the exported game sheets, and publishes the release. Concurrency per language: two merges in a row publish two releases in order. |
 

@@ -113,9 +113,9 @@ while IFS=$'\t' read -r status path_a path_b; do
     continue
   fi
 
-  # A sync follows the source and keeps existing descriptive header fields unchanged.
+  # Ignore the unused root questName field when comparing metadata.
   if ! jq -e -n --slurpfile b "$before" --slurpfile a "$after" '
-    def metadata: .entries |= map(del(.target));
+    def metadata: del(.questName) | .entries |= map(del(.target));
     ($b[0] | metadata) == ($a[0] | metadata)
   ' > /dev/null; then
     if [ ! -f "$english" ]; then
@@ -130,7 +130,7 @@ while IFS=$'\t' read -r status path_a path_b; do
       | if $order == ($a[0].entries | map(.gameKey))
            and ($order | sort) == (.entries | map(.gameKey) | sort)
         then .entries = [$order[] | $source[.]] else . end
-      | ($b[0] | del(.entries, .gameVersion, .conversation, .sheet))
+      | ($b[0] | del(.entries, .gameVersion, .conversation, .sheet, .questName))
         + (if $path | startswith("corpus/flat/") then {sheet: .conversation}
          else {conversation} end) + {gameVersion, entries: [.entries[] |
            . as $row | {gameKey, hash, target:
@@ -141,10 +141,10 @@ while IFS=$'\t' read -r status path_a path_b; do
       continue
     fi
     if ! jq -e -n --slurpfile s "$synced" --slurpfile a "$after" '
-      def metadata: .entries |= map(del(.target));
+      def metadata: del(.questName) | .entries |= map(del(.target));
       ($s[0] | metadata) == ($a[0] | metadata)
     ' > /dev/null; then
-      problems+=("\`$path\`: a sync must match the English version, keys and hashes, keep existing descriptive fields, and use the existing or source row order.")
+      problems+=("\`$path\`: a sync must match the English version, keys and hashes, keep other existing header fields, and use the existing or source row order.")
       continue
     fi
     cp "$synced" "$before"

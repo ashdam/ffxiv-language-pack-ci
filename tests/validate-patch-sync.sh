@@ -41,7 +41,7 @@ for change in \
   '.gameVersion = "1"' \
   '.sheet = "Wrong"' \
   '.extra = "unexpected"' \
-  '.questName = "Changed label"' \
+  '.entries[0].questName = "Unexpected row field"' \
   '.entries[0].target = 12' \
   '.entries[0].target = "<br>"' \
   '.entries[0].target = "TODO"'; do
@@ -76,8 +76,11 @@ base=$(git -C "$work/repo" rev-parse HEAD)
 jq '.gameVersion = "3"' "$work/repo/corpus/quest/Legacy.json" > "$work/legacy.json"
 cp "$work/legacy.json" "$work/repo/corpus/quest/Legacy.json"
 check 0 'version sync preserves an existing quest name and row order'
+for change in '.questName = "Changed quest"' 'del(.questName)'; do
+  jq "$change" "$work/legacy.json" > "$work/repo/corpus/quest/Legacy.json"
+  check 0 "unused quest header: $change"
+done
 for change in \
-  '.questName = "Wrong quest"' \
   '.entries = [.entries[1], .entries[2], .entries[0]]' \
   '.entries[0].hash = "invented"' \
   '.entries |= .[:2]'; do
