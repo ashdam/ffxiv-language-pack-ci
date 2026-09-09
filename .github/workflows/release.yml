@@ -70,13 +70,13 @@ jobs:
           dotnet-version: "10.0.x"
 
       # Lumina, the same build Dalamud ships, which the tools reference from a local install.
-      # The archive must match the pinned hash. After a Dalamud update, put the new hash here.
+      # Keep the archive revision and hash in sync.
       - name: "Fetch Dalamud"
         shell: "pwsh"
         env:
-          DALAMUD_SHA256: "c947e8965c2eea491f657d2a21a4ed61da6cc0913a68d4804a744dba391c6661"
+          DALAMUD_SHA256: "2343ab848def4f749a8b7ecf9a139e82f38801a8f631f6b55caf748c768aab4c"
         run: |
-          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile "$env:RUNNER_TEMP/dalamud.zip"
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/86761b0e692b0346c9fe41fa96bdd0dd766f9b6f/latest.zip' -OutFile "$env:RUNNER_TEMP/dalamud.zip"
           $hash = (Get-FileHash "$env:RUNNER_TEMP/dalamud.zip" -Algorithm SHA256).Hash.ToLower()
           if ($hash -ne $env:DALAMUD_SHA256) { throw "Dalamud archive hash $hash is not the pinned one. Check the Dalamud release, then update DALAMUD_SHA256." }
           Expand-Archive -Path "$env:RUNNER_TEMP/dalamud.zip" -DestinationPath "$env:RUNNER_TEMP/dalamud" -Force
@@ -125,6 +125,17 @@ jobs:
         run: |
           Tools/build-pack.ps1 -Language $env:LANGUAGE
           if ($LASTEXITCODE -ne 0) { throw "The build stopped." }
+
+      - name: "Verify packaged ULD files"
+        shell: "pwsh"
+        env:
+          LANGUAGE: "${{ inputs.language }}"
+        run: |
+          $pack = Get-Content pack/pack.json -Raw | ConvertFrom-Json
+          $repo = ($pack.repo -split '/')[-1]
+          $archive = Join-Path "$env:GITHUB_WORKSPACE/build" "$repo.zip"
+          dotnet run --project Tools/PackBuilder -c Release -- --language $env:LANGUAGE --verify-pack-layouts $archive
+          if ($LASTEXITCODE -ne 0) { throw 'The archive does not contain the validated ULD files.' }
 
       - name: "Publish the release"
         shell: "pwsh"

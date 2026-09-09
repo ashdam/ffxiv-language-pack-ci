@@ -33,6 +33,10 @@ jobs:
 - When the language has a lead: `CODEOWNERS` with `corpus/ @lead` and *require review from code
   owners* in the same rule.
 
+ULD definitions in `layouts/*.json` are checked by PackBuilder against the original files in
+`ffxiv-game-sheets/ui/uld/`. The source hash and node fields must match. Only declared font-size
+bytes may change. The release also checks the ULD files inside the ZIP before publication.
+
 ## What the release runner does not check
 
 The full validator needs the installed game and does not run here. The build's own gates

@@ -38,6 +38,19 @@ while IFS=$'\t' read -r status path_a path_b; do
   kind=${status:0:1}
   path=${path_b:-$path_a}
 
+  if [[ $path =~ ^layouts/[^/]+\.json$ ]]; then
+    if [[ $kind != A && $kind != M && $kind != D ]]; then
+      problems+=("\`$path\`: layout definitions may only be added, modified or removed.")
+    elif [[ $kind != D ]]; then
+      mode=$(git -C "$repo" ls-tree "$head" -- "$path")
+      if [[ ${mode%% *} != 100644 ]]; then
+        problems+=("\`$path\`: layout definitions must be regular non-executable files.")
+      fi
+    fi
+    changed_files=$((changed_files + 1))
+    continue
+  fi
+
   # A font is a binary the pack serves as it is: it may be added or replaced, and nothing here can
   # read inside it. Everything else is a corpus or glossary .json.
   if [[ $path =~ ^fonts/[^/]+\.(fdt|tex)$ ]]; then
