@@ -40,3 +40,13 @@ check 0 'Valid layout paths are restored'
 base=$(git -C "$work/repo" rev-parse HEAD)
 git -C "$work/repo" rm -q layouts/example.json
 check 0 'Layout removal is allowed'
+
+mkdir -p "$work/repo/.github/workflows"
+printf 'on:\n  push:\n    paths: ["corpus/**", "glossary/**", "fonts/**", "pack.json"]\n' > "$work/repo/.github/workflows/release.yml"
+git -C "$work/repo" add -A
+git -C "$work/repo" commit -qm 'Release fixture'
+base=$(git -C "$work/repo" rev-parse HEAD)
+printf 'on:\n  push:\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "pack.json"]\n' > "$work/repo/.github/workflows/release.yml"
+check 0 'Layout release trigger is allowed'
+printf 'jobs: {}\n' >> "$work/repo/.github/workflows/release.yml"
+check 1 'Other workflow changes are rejected'

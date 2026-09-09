@@ -38,6 +38,19 @@ while IFS=$'\t' read -r status path_a path_b; do
   kind=${status:0:1}
   path=${path_b:-$path_a}
 
+  if [[ $path == .github/workflows/release.yml && $kind == M ]]; then
+    # Allow only the layout path in the existing release trigger.
+    mode=$(git -C "$repo" ls-tree "$head" -- "$path")
+    before=$(git -C "$repo" show "$base:$path"; printf '.')
+    after=$(git -C "$repo" show "$head:$path"; printf '.')
+    old_trigger=$'\n    paths: ["corpus/**", "glossary/**", "fonts/**", "pack.json"]\n'
+    new_trigger=$'\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "pack.json"]\n'
+    if [[ ${mode%% *} == 100644 && $before == *"$old_trigger"* && $after == "${before/"$old_trigger"/"$new_trigger"}" ]]; then
+      changed_files=$((changed_files + 1))
+      continue
+    fi
+  fi
+
   if [[ $path =~ ^layouts/[^/]+\.json$ ]]; then
     if [[ $kind != A && $kind != M && $kind != D ]]; then
       problems+=("\`$path\`: layout definitions may only be added, modified or removed.")
