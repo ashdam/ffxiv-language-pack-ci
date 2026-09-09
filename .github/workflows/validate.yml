@@ -55,6 +55,12 @@ jobs:
         run: |
           bash .ci/scripts/validate-pr.sh "$BASE_SHA" "$HEAD_SHA" .corpus-en validate-report.md
 
+      - name: "Validate ULD layouts"
+        uses: ./.ci/actions/validate-layouts
+        with:
+          language: ${{ inputs.language }}
+          read-token: ${{ secrets.CI_READ_TOKEN || github.token }}
+
       # The summary shows on every run. The comment needs a write token, which a fork's run does not get.
       - name: "Report the result"
         if: "always()"
