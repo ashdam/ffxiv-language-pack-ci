@@ -33,14 +33,14 @@ jobs:
       # Actions pinned by commit: a tag can be moved, a commit cannot.
       # Full history: the release notes list the commits since the previous release's corpusCommit.
       - name: "Checkout the language repository"
-        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
+        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
         with:
           fetch-depth: 0
           path: "pack"
           persist-credentials: false
 
       - name: "Checkout the English corpus"
-        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
+        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
         with:
           repository: "ashdam/ffxiv-corpus-en"
           path: "corpus-en"
@@ -48,7 +48,7 @@ jobs:
           persist-credentials: false
 
       - name: "Checkout the tools"
-        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
+        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
         with:
           repository: "ashdam/corpus-extractor"
           path: "Tools"
@@ -57,7 +57,7 @@ jobs:
 
       # The game's Excel files, exported with `CorpusExtractor --export-sheets` after every patch.
       - name: "Checkout the game sheets"
-        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
+        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
         with:
           repository: "ashdam/ffxiv-game-sheets"
           path: "game-sheets"
@@ -65,7 +65,7 @@ jobs:
           persist-credentials: false
 
       - name: "Set up .NET"
-        uses: "actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9" # v4
+        uses: "actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1" # v5
         with:
           dotnet-version: "10.0.x"
 
