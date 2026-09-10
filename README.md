@@ -37,11 +37,11 @@ ULD definitions in `layouts/*.json` are checked by PackBuilder against the origi
 `ffxiv-game-sheets/ui/uld/`. The source hash and node fields must match. Only declared font-size
 bytes may change. The release also checks the ULD files inside the ZIP before publication.
 
-## What the release runner does not check
+## Validation responsibilities
 
-The full validator needs the installed game and does not run here. The build's own gates
-run instead: every page is rebuilt byte-identical before anything is substituted, and a row whose
-macros do not survive the round trip is skipped and counted, never guessed at.
+The path script checks permitted paths, operations and file modes.
+CorpusValidator checks source and target content and baseline metadata without an installed game.
+PackBuilder checks binary output and the fonts included in the language pack.
 
 ## What the workflows may do
 
