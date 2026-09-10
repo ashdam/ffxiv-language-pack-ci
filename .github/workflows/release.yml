@@ -100,7 +100,7 @@ jobs:
             "out = $ws/build/Gubal Library ($upper)",
             '',
             '[CorpusExtractor]',
-            "excluded = $ws/Tools/excluded-rows.json",
+            "excluded = $ws/Tools/CorpusExtractor/config/excluded-rows.json",
             '',
             '[PackBuilder]',
             "inventory = $ws/Tools/LocalizationKit/LocalizationKit.csproj"

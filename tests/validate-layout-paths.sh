@@ -17,7 +17,7 @@ check() {
   if [ "${3:-}" = executable ]; then git -C "$work/repo" update-index --chmod=+x layouts/example.json; fi
   if [ "${3:-}" = regular ]; then git -C "$work/repo" update-index --chmod=-x layouts/example.json; fi
   git -C "$work/repo" commit -qm fixture --allow-empty
-  bash "$validator" "$base" HEAD "$work/source" "$work/report.md" "$work/repo" > "$work/output" || result=$?
+  bash "$validator" "$base" HEAD "$work/report.md" "$work/repo" > "$work/output" || result=$?
   if [ "$result" != "$expected" ]; then
     cat "$work/output"
     echo "FAIL: $label"

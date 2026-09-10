@@ -16,7 +16,7 @@ permissions: {}
 
 jobs:
   validate:
-    name: "Validate the changed rows"
+    name: "Validate paths and corpus"
     runs-on: "ubuntu-latest"
     permissions:
       contents: "read"
@@ -28,6 +28,7 @@ jobs:
       - name: "Checkout the pull request"
         uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" # v4
         with:
+          ref: "${{ github.event.pull_request.head.sha || github.sha }}"
           fetch-depth: 0
           persist-credentials: false
 
@@ -47,13 +48,27 @@ jobs:
           token: "${{ secrets.CI_READ_TOKEN || github.token }}"
           persist-credentials: false
 
-      - name: "Check the rows"
+      - name: "Checkout the tools"
+        uses: "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
+        with:
+          repository: "ashdam/corpus-extractor"
+          ref: "main"
+          path: ".tools"
+          token: "${{ secrets.CI_READ_TOKEN || github.token }}"
+          persist-credentials: false
+
+      - name: "Set up .NET"
+        uses: "actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9"
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: "Check path restrictions"
         shell: "bash"
         env:
           BASE_SHA: "${{ github.event.pull_request.base.sha }}"
           HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
         run: |
-          bash .ci/scripts/validate-pr.sh "$BASE_SHA" "$HEAD_SHA" .corpus-en validate-report.md
+          bash .ci/scripts/validate-pr.sh "$BASE_SHA" "$HEAD_SHA" path-report.md
 
       - name: "Validate ULD layouts"
         uses: ./.ci/actions/validate-layouts
@@ -61,12 +76,39 @@ jobs:
           language: ${{ inputs.language }}
           read-token: ${{ secrets.CI_READ_TOKEN || github.token }}
 
+      - name: "Validate content"
+        shell: "pwsh"
+        env:
+          LANGUAGE: "${{ inputs.language }}"
+          BASE_SHA: "${{ github.event.pull_request.base.sha }}"
+        run: |
+          $baseline = Join-Path $env:RUNNER_TEMP 'corpus-baseline'
+          New-Item -ItemType Directory -Force -Path $baseline | Out-Null
+          $archive = Join-Path $env:RUNNER_TEMP 'corpus-baseline.tar'
+          git archive --format=tar --output=$archive $env:BASE_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar -xf $archive -C $baseline
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $config = Join-Path $env:RUNNER_TEMP 'validator.ini'
+          @(
+            '[common]'
+            "source = $env:GITHUB_WORKSPACE/.corpus-en"
+            "[target.$env:LANGUAGE]"
+            "dir = $env:GITHUB_WORKSPACE"
+            '[CorpusExtractor]'
+            "excluded = $env:GITHUB_WORKSPACE/.tools/CorpusExtractor/config/excluded-rows.json"
+          ) | Set-Content -LiteralPath $config
+          $env:FF14_TOOLS_CONFIG = $config
+          dotnet run --project .tools/CorpusValidator -c Release -- --language $env:LANGUAGE --baseline $baseline --json validate-report.json --markdown validate-report.md
+          exit $LASTEXITCODE
       # The summary shows on every run. The comment needs a write token, which a fork's run does not get.
       - name: "Report the result"
         if: "always()"
         shell: "bash"
         run: |
-          if [ -s validate-report.md ]; then cat validate-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          for report in path-report.md validate-report.md; do
+            if [ -s "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
 
       - name: "Comment the result"
         if: "always() && github.event_name == 'pull_request'"
