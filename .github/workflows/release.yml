@@ -123,7 +123,7 @@ jobs:
         env:
           LANGUAGE: "${{ inputs.language }}"
         run: |
-          Tools/build-pack.ps1 -Language $env:LANGUAGE
+          dotnet run --project Tools/PackBuilder -c Release -- --language $env:LANGUAGE
           if ($LASTEXITCODE -ne 0) { throw "The build stopped." }
 
       - name: "Verify packaged ULD files"
