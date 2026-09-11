@@ -1,5 +1,5 @@
 name: "Validate ULD layouts"
-description: "Validate language layout definitions against exported game files."
+description: "Validate layouts. Requires .tools with PackBuilder and .NET 10."
 inputs:
   language:
     required: true
@@ -16,16 +16,6 @@ runs:
       run: |
         if [ -d layouts ]; then echo 'present=true' >> "$GITHUB_OUTPUT"; fi
 
-    - name: "Checkout the layout tools"
-      if: steps.layouts.outputs.present == 'true'
-      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      with:
-        repository: ashdam/corpus-extractor
-        ref: main
-        path: .layout-tools
-        token: ${{ inputs.read-token }}
-        persist-credentials: false
-
     - name: "Checkout the original game files"
       if: steps.layouts.outputs.present == 'true'
       uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -34,12 +24,6 @@ runs:
         path: .layout-source
         token: ${{ inputs.read-token }}
         persist-credentials: false
-
-    - name: "Set up .NET"
-      if: steps.layouts.outputs.present == 'true'
-      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
-      with:
-        dotnet-version: 10.0.x
 
     - name: "Fetch Lumina"
       if: steps.layouts.outputs.present == 'true'
@@ -68,5 +52,5 @@ runs:
           "out = $env:RUNNER_TEMP/layout-output"
         ) | Set-Content -LiteralPath $config
         $env:FF14_TOOLS_CONFIG = $config
-        dotnet run --project .layout-tools/PackBuilder -c Release "-p:DalamudLibPath=$env:RUNNER_TEMP/layout-dalamud/" -- --language $env:LANGUAGE --verify-layouts
+        dotnet run --project .tools/PackBuilder -c Release "-p:DalamudLibPath=$env:RUNNER_TEMP/layout-dalamud/" -- --language $env:LANGUAGE --verify-layouts
         if ($LASTEXITCODE -ne 0) { throw 'ULD layout validation failed.' }
