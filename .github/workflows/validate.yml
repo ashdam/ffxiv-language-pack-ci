@@ -14,6 +14,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: validate-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: "Validate paths and corpus"
@@ -39,6 +43,14 @@ jobs:
           path: ".ci"
           persist-credentials: false
 
+      - name: "Check path restrictions"
+        shell: "bash"
+        env:
+          BASE_SHA: "${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
+        run: |
+          bash .ci/scripts/validate-pr.sh "$BASE_SHA" "$HEAD_SHA" path-report.md
+
       # The English rows the macro check compares against. Shallow: the history is not needed.
       - name: "Checkout the English corpus"
         uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
@@ -61,14 +73,6 @@ jobs:
         uses: "actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1"
         with:
           dotnet-version: "10.0.x"
-
-      - name: "Check path restrictions"
-        shell: "bash"
-        env:
-          BASE_SHA: "${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
-        run: |
-          bash .ci/scripts/validate-pr.sh "$BASE_SHA" "$HEAD_SHA" path-report.md
 
       - name: "Validate ULD layouts"
         uses: ./.ci/actions/validate-layouts

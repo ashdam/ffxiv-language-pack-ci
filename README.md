@@ -1,51 +1,60 @@
 # ffxiv-language-pack-ci
 
-The workflows every `ffxiv-language-pack-<code>` repository calls, so there is one copy of each.
+Shared workflows for `ffxiv-language-pack-<code>` repositories.
 
-| Workflow | Called on | What it does |
+| Workflow | Use | Result |
 |---|---|---|
-| `validate.yml` | every pull request | Checks translation edits and source-backed patch syncs. Row metadata must match `main` or the current English source, with the unused root `questName` field excluded from this comparison; targets must pass the JSON, placeholder and macro checks. Reports rejected rows on the pull request. |
-| `auto-merge.yml` | every pull request | Enables auto-merge, so the pull request lands the moment `validate` passes. A repository with a language lead makes review required, and the workflow then waits for it. |
-| `release.yml` | every push to `main` | Builds the pack from the corpus and the exported game sheets, and publishes the release. Concurrency per language: two merges in a row publish two releases in order. |
+| `validate.yml` | Language pack pull requests | Checks paths, corpus content and optional layouts. A new run cancels the previous validation for the same PR and validates the full corpus again. |
+| `auto-merge.yml` | Called by a language repository | Enables auto-merge. Required checks and reviews must be configured in the repository rules. |
+| `release.yml` | Changes to release inputs on `main`, or manual dispatch | Checks the source sync, builds and publishes the pack, then commits its coverage. Releases use a separate concurrency group and are not cancelled by validation. |
+| `test.yml` | Changes to CI scripts or tests | Checks Bash syntax and runs the path restriction tests. |
 
-A language repository calls them like this, in its own `.github/workflows/`:
+A language repository calls a shared workflow from its own `.github/workflows/`:
 
 ```yaml
 jobs:
   validate:
     uses: ashdam/ffxiv-language-pack-ci/.github/workflows/validate.yml@main
     with:
-      language: it
+      language: es-es
     secrets: inherit
 ```
 
-## Secrets a language repository needs
+## Validation
 
-| Secret | For |
+- `scripts/validate-pr.sh` checks permitted paths, operations and file modes before the build dependencies are downloaded.
+- CorpusValidator checks source and target content and baseline metadata without an installed game.
+- PackBuilder checks layout definitions against the original ULD files. The source hash and node fields must match; only declared font-size bytes may change.
+- The layout action uses the Tools checkout and .NET setup from the validation job.
+- Release checks cover the built pack, font character support and packaged ULD files.
+
+The job summary contains the path and corpus reports. The automatic PR comment contains the corpus report.
+
+## Coverage
+
+PackBuilder calls `LocalizationKit --inventory --format json`. It includes that document in the pack manifest and writes a copy beside the archive.
+
+After publication, the release workflow copies the document to `coverage.json` and commits it to the language repository with `CI_MERGE_TOKEN`. The web reads that file. The release path filter excludes `coverage.json`, so this commit does not start another release. PR validation does not update coverage.
+
+## Tests
+
+`tests/validate-layout-paths.sh` checks allowed layout paths and operations, rejects executable files and raw ULD files, and restricts workflow edits.
+
+`validate-new-sheets.sh` and `validate-patch-sync.sh` use an unsupported script interface and are not run. Their content cases belong in CorpusValidator tests.
+
+## Secrets and repository rules
+
+| Secret | Use |
 |---|---|
-| `CI_READ_TOKEN` | Reading the private repositories the release clones: the build tools and the game sheets. A fine-grained token, contents read. |
-| `CI_MERGE_TOKEN` | Enabling auto-merge as a person. A fine-grained token on the language repository: contents write, pull requests write. The workflow token cannot be used: a merge it makes starts no workflow, so the release would never run. |
+| `CI_READ_TOKEN` | Reads the private Tools and game-sheet repositories. Required for release; validation can use the workflow token when it has access. |
+| `CI_MERGE_TOKEN` | Writes the coverage commit. Also enables auto-merge when that workflow is called. |
 
-## Repository settings
+Language repositories must configure the current validation status as a required check. A language with a lead must require the lead's review through `CODEOWNERS` and branch rules.
 
-- **Allow auto-merge** on, and a branch protection rule on `main` with `validate` as a required
-  status check. Without the rule `gh pr merge --auto` merges at once; without auto-merge it refuses.
-- When the language has a lead: `CODEOWNERS` with `corpus/ @lead` and *require review from code
-  owners* in the same rule.
+Enable repository auto-merge only when the language repository calls that workflow. Without required branch rules, `gh pr merge --auto` can merge immediately.
 
-ULD definitions in `layouts/*.json` are checked by PackBuilder against the original files in
-`ffxiv-game-sheets/ui/uld/`. The source hash and node fields must match. Only declared font-size
-bytes may change. The release also checks the ULD files inside the ZIP before publication.
+## Permissions
 
-## Validation responsibilities
+Each job requests its own permissions. PR files are read as data; validation code comes from CI and Tools. Checkouts do not retain credentials.
 
-The path script checks permitted paths, operations and file modes.
-CorpusValidator checks source and target content and baseline metadata without an installed game.
-PackBuilder checks binary output and the fonts included in the language pack.
-
-## What the workflows may do
-
-- The workflow token starts with no permissions; each job asks for what it needs: `validate` reads contents and writes a comment, `release` writes contents, `auto-merge` writes contents and pull requests.
-- Nothing from a pull request is executed. `validate` reads its files as data and runs the script from this repository; `auto-merge` checks nothing out.
-- Every action is pinned by commit, and the Dalamud archive by hash. A Dalamud update needs the new hash in `release.yml`.
-- Checkouts keep no credentials. The tokens live in the language repository's secrets and reach the logs only masked.
+External actions are pinned by commit. The Dalamud archive is pinned by revision and hash.
