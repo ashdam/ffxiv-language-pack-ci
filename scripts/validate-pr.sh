@@ -33,6 +33,8 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
     allowed='AM'
   elif [[ $path =~ ^glossary/[^/]+\.json$ ]]; then
     allowed='M'
+  elif [[ $path == review/toponimos-decisiones.csv || $path == review/toponimos.md ]]; then
+    allowed='AM'
   elif [[ $path =~ ^layouts/[^/]+\.json$ ]]; then
     allowed='AMD'
   elif [[ $path =~ ^fonts/[^/]+\.(fdt|tex)$ ]]; then
