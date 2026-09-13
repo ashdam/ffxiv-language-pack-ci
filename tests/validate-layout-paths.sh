@@ -50,3 +50,14 @@ printf 'on:\n  push:\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layou
 check 0 'Layout release trigger is allowed'
 printf 'jobs: {}\n' >> "$work/repo/.github/workflows/release.yml"
 check 1 'Other workflow changes are rejected'
+
+printf '# Language pack\n' > "$work/repo/README.md"
+git -C "$work/repo" add -A
+git -C "$work/repo" commit -qm 'README fixture'
+base=$(git -C "$work/repo" rev-parse HEAD)
+printf 'Pack documentation.\n' >> "$work/repo/README.md"
+check 0 'README edits are allowed'
+git -C "$work/repo" update-index --chmod=+x README.md
+check 1 'Executable README is rejected'
+git -C "$work/repo" rm -fq README.md
+check 1 'README removal is rejected'

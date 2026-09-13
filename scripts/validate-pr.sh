@@ -31,6 +31,8 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
 
   if [[ $path =~ ^corpus/.+\.json$ ]]; then
     allowed='AM'
+  elif [[ $path == README.md ]]; then
+    allowed='M'
   elif [[ $path =~ ^glossary/[^/]+\.json$ ]]; then
     allowed='M'
   elif [[ $path =~ ^layouts/[^/]+\.json$ ]]; then
