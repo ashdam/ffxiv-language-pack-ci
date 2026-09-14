@@ -14,8 +14,8 @@ base=$(git -C "$work/repo" rev-parse HEAD)
 check() {
   local expected=$1 label=$2 result=0
   git -C "$work/repo" add -A
-  if [ "${3:-}" = executable ]; then git -C "$work/repo" update-index --chmod=+x layouts/example.json; fi
-  if [ "${3:-}" = regular ]; then git -C "$work/repo" update-index --chmod=-x layouts/example.json; fi
+  if [ "${3:-}" = executable ]; then git -C "$work/repo" update-index --chmod=+x "${4:-layouts/example.json}"; fi
+  if [ "${3:-}" = regular ]; then git -C "$work/repo" update-index --chmod=-x "${4:-layouts/example.json}"; fi
   git -C "$work/repo" commit -qm fixture --allow-empty
   bash "$validator" "$base" HEAD "$work/report.md" "$work/repo" > "$work/output" || result=$?
   if [ "$result" != "$expected" ]; then
@@ -57,7 +57,27 @@ git -C "$work/repo" commit -qm 'README fixture'
 base=$(git -C "$work/repo" rev-parse HEAD)
 printf 'Pack documentation.\n' >> "$work/repo/README.md"
 check 0 'README edits are allowed'
-git -C "$work/repo" update-index --chmod=+x README.md
-check 1 'Executable README is rejected'
+check 1 'Executable README is rejected' executable README.md
 git -C "$work/repo" rm -fq README.md
 check 1 'README removal is rejected'
+
+mkdir -p "$work/repo/glossary"
+printf '{"language":"es-ES"}\n' > "$work/repo/pack.json"
+git -C "$work/repo" add -A
+git -C "$work/repo" commit -qm 'Pack fixture'
+base=$(git -C "$work/repo" rev-parse HEAD)
+printf '{"entries":[]}\n' > "$work/repo/glossary/placename-override.json"
+printf '{"language":"es-es"}\n' > "$work/repo/pack.json"
+check 0 'Place glossary creation and pack edits are allowed'
+check 1 'Executable pack metadata is rejected' executable pack.json
+check 0 'Regular pack metadata is allowed' regular pack.json
+printf '{}\n' > "$work/repo/glossary/unknown.json"
+check 1 'Other glossary additions are rejected'
+git -C "$work/repo" rm -q glossary/unknown.json
+check 0 'Valid glossary paths are restored'
+base=$(git -C "$work/repo" rev-parse HEAD)
+git -C "$work/repo" rm -q glossary/placename-override.json
+check 1 'Place glossary removal is rejected'
+base=$(git -C "$work/repo" rev-parse HEAD)
+git -C "$work/repo" rm -q pack.json
+check 1 'Pack metadata removal is rejected'

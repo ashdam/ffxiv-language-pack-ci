@@ -31,8 +31,10 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
 
   if [[ $path =~ ^corpus/.+\.json$ ]]; then
     allowed='AM'
-  elif [[ $path == README.md ]]; then
+  elif [[ $path == README.md || $path == pack.json ]]; then
     allowed='M'
+  elif [[ $path == glossary/placename-override.json ]]; then
+    allowed='AM'
   elif [[ $path =~ ^glossary/[^/]+\.json$ ]]; then
     allowed='M'
   elif [[ $path =~ ^layouts/[^/]+\.json$ ]]; then
