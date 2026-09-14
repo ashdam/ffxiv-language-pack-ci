@@ -61,3 +61,26 @@ git -C "$work/repo" update-index --chmod=+x README.md
 check 1 'Executable README is rejected'
 git -C "$work/repo" rm -fq README.md
 check 1 'README removal is rejected'
+
+mkdir -p "$work/repo/glossary"
+printf '{"language":"es-ES"}\n' > "$work/repo/pack.json"
+git -C "$work/repo" add -A
+git -C "$work/repo" commit -qm 'Pack fixture'
+base=$(git -C "$work/repo" rev-parse HEAD)
+printf '{"entries":[]}\n' > "$work/repo/glossary/placename-override.json"
+printf '{"language":"es-es"}\n' > "$work/repo/pack.json"
+check 0 'Place glossary creation and pack edits are allowed'
+git -C "$work/repo" update-index --chmod=+x pack.json
+check 1 'Executable pack metadata is rejected'
+git -C "$work/repo" update-index --chmod=-x pack.json
+check 0 'Regular pack metadata is allowed'
+printf '{}\n' > "$work/repo/glossary/unknown.json"
+check 1 'Other glossary additions are rejected'
+git -C "$work/repo" rm -q glossary/unknown.json
+check 0 'Valid glossary paths are restored'
+base=$(git -C "$work/repo" rev-parse HEAD)
+git -C "$work/repo" rm -q glossary/placename-override.json
+check 1 'Place glossary removal is rejected'
+base=$(git -C "$work/repo" rev-parse HEAD)
+git -C "$work/repo" rm -q pack.json
+check 1 'Pack metadata removal is rejected'
