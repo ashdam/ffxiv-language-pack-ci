@@ -17,15 +17,18 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
     continue
   fi
   if [[ $path == .github/workflows/release.yml && $kind == M ]]; then
-    # Allow only the layout path in the existing release trigger.
-    if [[ $kind == D ]]; then continue; fi
-  mode=$(git -C "$repo" ls-tree "$head" -- "$path")
+    # Allow only data paths in the existing release trigger.
+    mode=$(git -C "$repo" ls-tree "$head" -- "$path")
     before=$(git -C "$repo" show "$base:$path"; printf '.')
     after=$(git -C "$repo" show "$head:$path"; printf '.')
     old_trigger=$'\n    paths: ["corpus/**", "glossary/**", "fonts/**", "pack.json"]\n'
-    new_trigger=$'\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "pack.json"]\n'
-    if [[ ${mode%% *} == 100644 && $before == *"$old_trigger"* && $after == "${before/"$old_trigger"/"$new_trigger"}" ]]; then
-      continue
+    layout_trigger=$'\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "pack.json"]\n'
+    image_trigger=$'\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "ui/**", "pack.json"]\n'
+    if [[ ${mode%% *} == 100644 ]]; then
+      if [[ $before == *"$old_trigger"* && $after == "${before/"$old_trigger"/"$layout_trigger"}" ]] ||
+         [[ $before == *"$layout_trigger"* && $after == "${before/"$layout_trigger"/"$image_trigger"}" ]]; then
+        continue
+      fi
     fi
   fi
 
@@ -38,6 +41,8 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   elif [[ $path =~ ^glossary/[^/]+\.json$ ]]; then
     allowed='M'
   elif [[ $path =~ ^layouts/[^/]+\.json$ ]]; then
+    allowed='AMD'
+  elif [[ $path =~ ^ui/icon/(120000/en/120|121000/en/121)[0-9]{3}(_hr1)?\.tex$ ]]; then
     allowed='AMD'
   elif [[ $path =~ ^fonts/[^/]+\.(fdt|tex)$ ]]; then
     allowed='AM'

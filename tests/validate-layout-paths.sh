@@ -48,6 +48,9 @@ git -C "$work/repo" commit -qm 'Release fixture'
 base=$(git -C "$work/repo" rev-parse HEAD)
 printf 'on:\n  push:\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "pack.json"]\n' > "$work/repo/.github/workflows/release.yml"
 check 0 'Layout release trigger is allowed'
+base=$(git -C "$work/repo" rev-parse HEAD)
+printf 'on:\n  push:\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "ui/**", "pack.json"]\n' > "$work/repo/.github/workflows/release.yml"
+check 0 'Texture release trigger is allowed'
 printf 'jobs: {}\n' >> "$work/repo/.github/workflows/release.yml"
 check 1 'Other workflow changes are rejected'
 
@@ -81,3 +84,25 @@ check 1 'Place glossary removal is rejected'
 base=$(git -C "$work/repo" rev-parse HEAD)
 git -C "$work/repo" rm -q pack.json
 check 1 'Pack metadata removal is rejected'
+
+base=$(git -C "$work/repo" rev-parse HEAD)
+mkdir -p "$work/repo/ui/icon/120000/en" "$work/repo/ui/icon/121000/en"
+printf 'sd' > "$work/repo/ui/icon/120000/en/120021.tex"
+printf 'hd' > "$work/repo/ui/icon/121000/en/121001_hr1.tex"
+check 0 'Both banner folders and resolutions are allowed'
+check 1 'Executable texture is rejected' executable ui/icon/120000/en/120021.tex
+check 0 'Regular texture is allowed' regular ui/icon/120000/en/120021.tex
+printf 'wrong folder' > "$work/repo/ui/icon/120000/en/121001.tex"
+check 1 'Texture in the wrong icon folder is rejected'
+git -C "$work/repo" rm -q ui/icon/120000/en/121001.tex
+printf 'preview' > "$work/repo/ui/icon/120000/en/120021.png"
+check 1 'Texture preview is rejected'
+git -C "$work/repo" rm -q ui/icon/120000/en/120021.png
+mkdir -p "$work/repo/ui/icon/120000/fr"
+printf 'fr' > "$work/repo/ui/icon/120000/fr/120021.tex"
+check 1 'Unsupported texture language is rejected'
+git -C "$work/repo" rm -q ui/icon/120000/fr/120021.tex
+check 0 'Only valid textures remain'
+base=$(git -C "$work/repo" rev-parse HEAD)
+git -C "$work/repo" rm -q ui/icon/120000/en/120021.tex
+check 0 'Texture removal is allowed'

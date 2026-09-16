@@ -38,7 +38,7 @@ After publication, the release workflow copies the document to `coverage.json` a
 
 ## Tests
 
-`tests/validate-layout-paths.sh` checks allowed layout paths and operations, rejects executable files and raw ULD files, and restricts workflow edits.
+`tests/validate-layout-paths.sh` checks allowed layout and banner texture paths, rejects executable files and raw ULD files, and restricts workflow edits.
 
 `validate-new-sheets.sh` and `validate-patch-sync.sh` use an unsupported script interface and are not run. Their content cases belong in CorpusValidator tests.
 
