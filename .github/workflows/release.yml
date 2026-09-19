@@ -97,10 +97,14 @@ jobs:
             '',
             "[target.$env:LANGUAGE]",
             "dir = $ws/pack",
-            "out = $ws/build/Gubal Library ($upper)",
+            "out = $ws/build/Gubal Library ($upper)"
+          )
+          $targetExclusions = "$ws/pack/glossary/excluded-rows.json"
+          if (Test-Path -LiteralPath $targetExclusions) { $ini += "excluded = $targetExclusions" }
+          $ini += @(
             '',
             '[CorpusExtractor]',
-            "excluded = $ws/Tools/CorpusExtractor/config/excluded-rows.json",
+            "excluded = $ws/corpus-en/glossary/excluded-rows.json",
             '',
             '[PackBuilder]',
             "inventory = $ws/Tools/LocalizationKit/LocalizationKit.csproj"
