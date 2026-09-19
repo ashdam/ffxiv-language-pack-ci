@@ -94,14 +94,19 @@ jobs:
           tar -xf $archive -C $baseline
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $config = Join-Path $env:RUNNER_TEMP 'validator.ini'
-          @(
+          $ini = @(
             '[common]'
             "source = $env:GITHUB_WORKSPACE/.corpus-en"
             "[target.$env:LANGUAGE]"
             "dir = $env:GITHUB_WORKSPACE"
+          )
+          $targetExclusions = "$env:GITHUB_WORKSPACE/glossary/excluded-rows.json"
+          if (Test-Path -LiteralPath $targetExclusions) { $ini += "excluded = $targetExclusions" }
+          $ini += @(
             '[CorpusExtractor]'
-            "excluded = $env:GITHUB_WORKSPACE/.tools/CorpusExtractor/config/excluded-rows.json"
-          ) | Set-Content -LiteralPath $config
+            "excluded = $env:GITHUB_WORKSPACE/.corpus-en/glossary/excluded-rows.json"
+          )
+          $ini | Set-Content -LiteralPath $config
           $env:FF14_TOOLS_CONFIG = $config
           dotnet run --project .tools/CorpusValidator -c Release -- --language $env:LANGUAGE --baseline $baseline --json validate-report.json --markdown validate-report.md
           exit $LASTEXITCODE

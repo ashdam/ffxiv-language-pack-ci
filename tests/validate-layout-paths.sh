@@ -70,8 +70,9 @@ git -C "$work/repo" add -A
 git -C "$work/repo" commit -qm 'Pack fixture'
 base=$(git -C "$work/repo" rev-parse HEAD)
 printf '{"entries":[]}\n' > "$work/repo/glossary/placename-override.json"
+printf '{"exclusion_groups":[]}\n' > "$work/repo/glossary/excluded-rows.json"
 printf '{"language":"es-es"}\n' > "$work/repo/pack.json"
-check 0 'Place glossary creation and pack edits are allowed'
+check 0 'Language policy files and pack edits are allowed'
 check 1 'Executable pack metadata is rejected' executable pack.json
 check 0 'Regular pack metadata is allowed' regular pack.json
 printf '{}\n' > "$work/repo/glossary/unknown.json"
