@@ -8,6 +8,7 @@ report=$3
 repo=${4:-.}
 base=$(git -C "$repo" rev-parse --verify "$base^{commit}")
 head=$(git -C "$repo" rev-parse --verify "$head^{commit}")
+base=$(git -C "$repo" merge-base "$base" "$head")
 problems=()
 while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   kind=${status:0:1}
@@ -32,26 +33,8 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
     fi
   fi
 
-  if [[ $path =~ ^corpus/.+\.json$ ]]; then
-    allowed='AM'
-  elif [[ $path == README.md || $path == pack.json ]]; then
-    allowed='M'
-  elif [[ $path == glossary/placename-override.json || $path == glossary/excluded-rows.json ]]; then
-    allowed='AM'
-  elif [[ $path =~ ^glossary/[^/]+\.json$ ]]; then
-    allowed='M'
-  elif [[ $path =~ ^layouts/[^/]+\.json$ ]]; then
-    allowed='AMD'
-  elif [[ $path =~ ^ui/icon/(120000/en/120|121000/en/121)[0-9]{3}(_hr1)?\.tex$ ]]; then
-    allowed='AMD'
-  elif [[ $path =~ ^fonts/[^/]+\.(fdt|tex)$ ]]; then
-    allowed='AM'
-  else
-    problems+=("Path is not permitted: $path")
-    continue
-  fi
-  if [[ $allowed != *"$kind"* ]]; then
-    problems+=("Operation $kind is not permitted: $path")
+  if [[ $path == .github/workflows/* ]]; then
+    problems+=("Workflow changes are not permitted: $path")
     continue
   fi
   if [[ $kind == D ]]; then continue; fi

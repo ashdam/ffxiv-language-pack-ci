@@ -22,7 +22,7 @@ jobs:
 
 ## Validation
 
-- `scripts/validate-pr.sh` checks permitted paths, operations and file modes before the build dependencies are downloaded.
+- `scripts/validate-pr.sh` checks paths changed from the pull request merge base before dependencies are downloaded. It rejects workflow edits, renamed paths and non-regular files. Supported release trigger updates are allowed.
 - CorpusValidator checks source and target content and baseline metadata without an installed game.
 - PackBuilder checks layout definitions against the original ULD files. The source hash and node fields must match; only declared font-size bytes may change.
 - The layout action uses the Tools checkout and .NET setup from the validation job.
@@ -38,7 +38,7 @@ After publication, the release workflow copies the document to `coverage.json` a
 
 ## Tests
 
-`tests/validate-layout-paths.sh` checks allowed layout and banner texture paths, rejects executable files and raw ULD files, and restricts workflow edits.
+`tests/validate-layout-paths.sh` checks normal pack files, file modes and workflow restrictions.
 
 `validate-new-sheets.sh` and `validate-patch-sync.sh` use an unsupported script interface and are not run. Their content cases belong in CorpusValidator tests.
 
