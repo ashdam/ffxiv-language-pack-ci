@@ -102,6 +102,8 @@ jobs:
           )
           $targetExclusions = "$env:GITHUB_WORKSPACE/glossary/excluded-rows.json"
           if (Test-Path -LiteralPath $targetExclusions) { $ini += "excluded = $targetExclusions" }
+          $targetReviews = "$env:GITHUB_WORKSPACE/reviews/validator-reviews.json"
+          if (Test-Path -LiteralPath $targetReviews) { $ini += "reviews = $targetReviews" }
           $ini += @(
             '[CorpusExtractor]'
             "excluded = $env:GITHUB_WORKSPACE/.corpus-en/glossary/excluded-rows.json"
