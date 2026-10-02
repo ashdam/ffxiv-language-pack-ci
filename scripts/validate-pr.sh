@@ -14,8 +14,13 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   kind=${status:0:1}
   if [[ $kind = R || $kind = C ]]; then
     IFS= read -r -d '' destination
-    problems+=("Renamed or copied path: $path -> $destination")
-    continue
+    if [[ $kind = R && $path = glossary/excluded-rows.json && $destination = inventory-exclusions.json ]]; then
+      path=$destination
+      kind=A
+    else
+      problems+=("Renamed or copied path: $path -> $destination")
+      continue
+    fi
   fi
   if [[ $path == .github/workflows/release.yml && $kind == M ]]; then
     # Allow only data paths in the existing release trigger.
@@ -27,7 +32,9 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
     image_trigger=$'\n    paths: ["corpus/**", "glossary/**", "fonts/**", "layouts/**", "ui/**", "pack.json"]\n'
     if [[ ${mode%% *} == 100644 ]]; then
       if [[ $before == *"$old_trigger"* && $after == "${before/"$old_trigger"/"$layout_trigger"}" ]] ||
-         [[ $before == *"$layout_trigger"* && $after == "${before/"$layout_trigger"/"$image_trigger"}" ]]; then
+         [[ $before == *"$layout_trigger"* && $after == "${before/"$layout_trigger"/"$image_trigger"}" ]] ||
+         { [[ $before == *"$old_trigger"* || $before == *"$layout_trigger"* || $before == *"$image_trigger"* ]] &&
+           [[ $after == "${before/\"pack.json\"\]/\"pack.json\", \"inventory-exclusions.json\"\]}" ]]; }; then
         continue
       fi
     fi
