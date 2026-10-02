@@ -99,8 +99,6 @@ jobs:
             "dir = $ws/pack",
             "out = $ws/build/Gubal Library ($upper)"
           )
-          $targetExclusions = "$ws/pack/glossary/excluded-rows.json"
-          if (Test-Path -LiteralPath $targetExclusions) { $ini += "excluded = $targetExclusions" }
           $ini += @(
             '',
             '[CorpusExtractor]',
