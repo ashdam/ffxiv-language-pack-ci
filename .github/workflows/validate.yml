@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           base=$BASE_SHA
           head=$HEAD_SHA
-          report=path-report.md
+          report="path-report.md"
           repo=.
           base=$(git -C "$repo" rev-parse --verify "$base^{commit}")
           head=$(git -C "$repo" rev-parse --verify "$head^{commit}")
