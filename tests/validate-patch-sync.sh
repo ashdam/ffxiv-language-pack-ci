@@ -14,7 +14,7 @@ git -C "$work/repo" add -A
 git -C "$work/repo" commit -qm base
 base=$(git -C "$work/repo" rev-parse HEAD)
 cat > "$work/source/corpus/flat/Action.json" <<'JSON'
-{"schemaVersion":2,"sourceLanguage":"en","conversation":"Action","gameVersion":"2","entries":[{"gameKey":"Action#1","hash":"new","en":"Hello"},{"gameKey":"Action#3","hash":"added","en":"Bye"}]}
+{"schemaVersion":3,"sourceLanguage":"en","conversation":"Action","gameVersion":"2","entries":[{"gameKey":"Action#1","hash":"new","en":"Hello"},{"gameKey":"Action#3","hash":"added","en":"Bye"}]}
 JSON
 jq '{sheet: .conversation, questName: "Existing label", gameVersion, entries: [.entries[] | {gameKey, hash, target: "Hola"}]}' \
   "$work/source/corpus/flat/Action.json" > "$work/valid.json"
