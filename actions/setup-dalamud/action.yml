@@ -1,5 +1,5 @@
 name: Set up Dalamud libraries
-description: Download and cache the pinned Dalamud archive for .NET tools.
+description: Verify the pinned Dalamud archive and cache the Lumina libraries for .NET tools.
 runs:
   using: composite
   steps:
