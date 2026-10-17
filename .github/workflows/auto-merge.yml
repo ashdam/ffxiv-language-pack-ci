@@ -12,6 +12,7 @@ permissions: {}
 
 jobs:
   enable:
+    if: github.event.pull_request.draft == false
     name: "Merge when the checks pass"
     runs-on: "ubuntu-latest"
     permissions:
