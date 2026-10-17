@@ -1,172 +1,190 @@
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: "Release"
-
+name: Release
 on:
   workflow_call:
     inputs:
       language:
-        description: "The [target.*] suffix: es-es, it, pt-br, pl."
-        required: true
+        description: Optional expected language. The pack defines its language.
+        required: false
         type: string
     secrets:
       CI_READ_TOKEN:
         required: true
       CI_MERGE_TOKEN:
-        description: "A token of a person with write on this repository: commits coverage.json after the release."
         required: true
-
 permissions: {}
-
-# One release at a time per language, in order: a second merge waits for the first release rather
-# than racing it for the `latest` slot.
 concurrency:
-  group: "release-${{ inputs.language }}"
+  group: release-${{ github.repository }}
   cancel-in-progress: false
-
 jobs:
   release:
-    name: "Build and publish the pack"
-    runs-on: "ubuntu-latest"
+    name: Build and publish the pack
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     permissions:
-      contents: "write"
+      contents: write
     steps:
-      # Actions pinned by commit: a tag can be moved, a commit cannot.
-      # Full history: the release notes list the commits since the previous release's corpusCommit.
-      - name: "Checkout the language repository"
-        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
+      - name: Checkout the language repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
-          path: "pack"
+          path: pack
           persist-credentials: false
-
-      - name: "Checkout the English corpus"
-        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
+      - name: Read pack identity
+        env:
+          EXPECTED_LANGUAGE: ${{ inputs.language }}
+        run: |
+          language=$(jq -er '.language | ascii_downcase' pack/pack.json)
+          [[ "$language" =~ ^[a-z]{2,3}(-[a-z0-9]{2,8})*$ ]]
+          [[ -z "$EXPECTED_LANGUAGE" || "$EXPECTED_LANGUAGE" == "$language" ]]
+          [[ $(jq -er .repo pack/pack.json) == "$GITHUB_REPOSITORY" ]]
+          [[ "$GITHUB_REPOSITORY" == */ffxiv-language-pack-"$language" ]]
+          printf 'LANGUAGE=%s\n' "$language" >> "$GITHUB_ENV"
+      - name: Checkout the English corpus
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          repository: "ashdam/ffxiv-corpus-en"
-          path: "corpus-en"
-          token: "${{ secrets.CI_READ_TOKEN }}"
+          repository: ashdam/ffxiv-corpus-en
+          path: corpus-en
+          token: ${{ secrets.CI_READ_TOKEN }}
           persist-credentials: false
-
-      - name: "Checkout the tools"
-        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
+      - name: Checkout the tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          repository: "ashdam/corpus-extractor"
-          path: "Tools"
-          token: "${{ secrets.CI_READ_TOKEN }}"
+          repository: ashdam/corpus-extractor
+          path: Tools
+          token: ${{ secrets.CI_READ_TOKEN }}
           persist-credentials: false
-
-      # The game's Excel files, exported with `CorpusExtractor --export-sheets` after every patch.
-      - name: "Checkout the game sheets"
-        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09" # v5
+      - name: Checkout the game sheets
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          repository: "ashdam/ffxiv-game-sheets"
-          path: "game-sheets"
-          token: "${{ secrets.CI_READ_TOKEN }}"
+          repository: ashdam/ffxiv-game-sheets
+          path: game-sheets
+          token: ${{ secrets.CI_READ_TOKEN }}
           persist-credentials: false
-
-      - name: "Set up .NET"
-        uses: "actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1" # v5
+      - name: Checkout shared actions
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          dotnet-version: "10.0.x"
-
-      # Lumina, the same build Dalamud ships, which the tools reference from a local install.
-      # Keep the archive revision and hash in sync.
-      - name: "Fetch Dalamud"
-        shell: "pwsh"
-        env:
-          DALAMUD_SHA256: "2343ab848def4f749a8b7ecf9a139e82f38801a8f631f6b55caf748c768aab4c"
+          repository: ashdam/ffxiv-language-pack-ci
+          path: .ci
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 10.0.x
+      - name: Set up Dalamud libraries
+        uses: ./.ci/actions/setup-dalamud
+      - name: Write tools.ini
         run: |
-          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/86761b0e692b0346c9fe41fa96bdd0dd766f9b6f/latest.zip' -OutFile "$env:RUNNER_TEMP/dalamud.zip"
-          $hash = (Get-FileHash "$env:RUNNER_TEMP/dalamud.zip" -Algorithm SHA256).Hash.ToLower()
-          if ($hash -ne $env:DALAMUD_SHA256) { throw "Dalamud archive hash $hash is not the pinned one. Check the Dalamud release, then update DALAMUD_SHA256." }
-          Expand-Archive -Path "$env:RUNNER_TEMP/dalamud.zip" -DestinationPath "$env:RUNNER_TEMP/dalamud" -Force
-          "DalamudLibPath=$env:RUNNER_TEMP/dalamud/" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      # The runner's tools.ini: the same keys the tools read on a workstation, with the runner's paths.
-      - name: "Write tools.ini"
-        shell: "pwsh"
-        env:
-          LANGUAGE: "${{ inputs.language }}"
+          config="$RUNNER_TEMP/tools.ini"
+          {
+            printf '[common]\ngame = %s/game-sheets\nsource = %s/corpus-en\n' "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
+            printf '[target.%s]\ndir = %s/pack\nout = %s/build/Gubal Library (%s)\n' "$LANGUAGE" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" "${LANGUAGE^^}"
+            printf '[CorpusExtractor]\nexcluded = %s/corpus-en/glossary/excluded-rows.json\n' "$GITHUB_WORKSPACE"
+            printf '[PackBuilder]\ninventory = %s/Tools/LocalizationKit/LocalizationKit.csproj\n' "$GITHUB_WORKSPACE"
+          } > "$config"
+          printf 'FF14_TOOLS_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
+          mkdir -p build
+      - name: Check the corpus is in step with the game
+        run: dotnet run --project Tools/CorpusExtractor -c Release -- --language "$LANGUAGE" --sync-target --dry-run --strict
+      - name: Build the pack
+        run: dotnet run --project Tools/PackBuilder -c Release -- --language "$LANGUAGE"
+      - name: Verify packaged ULD files
+        run: dotnet run --project Tools/PackBuilder -c Release -- --language "$LANGUAGE" --verify-pack-layouts "build/${GITHUB_REPOSITORY##*/}.zip"
+      - name: Check publication inputs
+        id: publication
         run: |
-          $ws = $env:GITHUB_WORKSPACE
-          $upper = $env:LANGUAGE.ToUpperInvariant()
-          $ini = @(
-            '[common]',
-            "game   = $ws/game-sheets",
-            "source = $ws/corpus-en",
-            '',
-            "[target.$env:LANGUAGE]",
-            "dir = $ws/pack",
-            "out = $ws/build/Gubal Library ($upper)"
-          )
-          $ini += @(
-            '',
-            '[CorpusExtractor]',
-            "excluded = $ws/corpus-en/glossary/excluded-rows.json",
-            '',
-            '[PackBuilder]',
-            "inventory = $ws/Tools/LocalizationKit/LocalizationKit.csproj"
-          )
-          Set-Content -Path "$ws/Tools/tools.ini" -Value $ini -Encoding utf8
-          New-Item -ItemType Directory -Force "$ws/build" | Out-Null
-
-      # A corpus behind the game is not built: the plugin would refuse the pack by gameVersion, and
-      # a page built against other rows would be worse than a refusal.
-      - name: "Check the corpus is in step with the game"
-        shell: "pwsh"
+          stamp="build/${GITHUB_REPOSITORY##*/}.build.json"
+          jq -e --arg repo "$GITHUB_REPOSITORY" '.repo == $repo' "$stamp"
+          zip=$(jq -er '.zipPath | select(type == "string" and length > 0)' "$stamp")
+          manifest=$(jq -er '.manifestPath | select(type == "string" and length > 0)' "$stamp")
+          [[ $(realpath "$zip") == "$GITHUB_WORKSPACE/build/${GITHUB_REPOSITORY##*/}.zip" ]]
+          [[ $(realpath "$manifest") == "$GITHUB_WORKSPACE/build/Gubal Library (${LANGUAGE^^})/gubal-manifest.json" ]]
+          unzip -p "$zip" gubal-manifest.json | cmp - "$manifest"
+          tag=$(jq -er '.gameVersion + "_" + .translationVersion' "$manifest")
+          [[ "$tag" =~ ^[0-9][0-9._-]*$ ]]
+          [[ $(jq -er .tag "$stamp") == "$tag" ]]
+          for name in target source; do
+            if [[ "$name" == target ]]; then directory="$GITHUB_WORKSPACE/pack"; else directory="$GITHUB_WORKSPACE/corpus-en"; fi
+            [[ $(jq -er --arg key "${name}Dir" '.[$key]' "$stamp") == "$directory" ]]
+            jq -e --arg name "$name" '.sources[$name].dirty == false' "$stamp"
+            commit=$(jq -er --arg name "$name" '.sources[$name].commit | select(type == "string" and length > 0)' "$stamp")
+            [[ $(git -C "$directory" rev-parse HEAD) == "$commit" ]]
+            [[ -z $(git -C "$directory" status --porcelain) ]]
+          done
+          [[ $(jq -er .corpusCommit "$manifest") == $(git -C pack rev-parse HEAD) ]]
+          printf 'tag=%s\nzip=%s\nmanifest=%s\n' "$tag" "$zip" "$manifest" >> "$GITHUB_OUTPUT"
+      - name: Prepare release notes
         env:
-          LANGUAGE: "${{ inputs.language }}"
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST: ${{ steps.publication.outputs.manifest }}
         run: |
-          dotnet run --project Tools/CorpusExtractor -c Release -- --language $env:LANGUAGE --sync-target --dry-run --strict
-          if ($LASTEXITCODE -ne 0) { throw "The corpus needs a sync before it can be released." }
-
-      - name: "Build the pack"
-        shell: "pwsh"
-        env:
-          LANGUAGE: "${{ inputs.language }}"
-        run: |
-          dotnet run --project Tools/PackBuilder -c Release -- --language $env:LANGUAGE
-          if ($LASTEXITCODE -ne 0) { throw "The build stopped." }
-
-      - name: "Verify packaged ULD files"
-        shell: "pwsh"
-        env:
-          LANGUAGE: "${{ inputs.language }}"
-        run: |
-          $pack = Get-Content pack/pack.json -Raw | ConvertFrom-Json
-          $repo = ($pack.repo -split '/')[-1]
-          $archive = Join-Path "$env:GITHUB_WORKSPACE/build" "$repo.zip"
-          dotnet run --project Tools/PackBuilder -c Release -- --language $env:LANGUAGE --verify-pack-layouts $archive
-          if ($LASTEXITCODE -ne 0) { throw 'The archive does not contain the validated ULD files.' }
-
-      - name: "Publish the release"
-        shell: "pwsh"
-        env:
-          LANGUAGE: "${{ inputs.language }}"
-          GH_TOKEN: "${{ github.token }}"
-        run: |
-          Tools/publish-pack.ps1 -Language $env:LANGUAGE
-
-      # The build leaves the coverage document beside the archive; it goes into the language
-      # repository as coverage.json, where the web reads it. Committed with a person's token: the
-      # workflow token cannot pass the branch rule. The file is outside the paths that start a
-      # release, so this push starts none.
-      - name: "Commit the coverage"
-        shell: "bash"
-        working-directory: "pack"
-        env:
-          TOKEN: "${{ secrets.CI_MERGE_TOKEN }}"
-          LANGUAGE: "${{ inputs.language }}"
-        run: |
-          cp "../build/ffxiv-language-pack-${LANGUAGE}.coverage.json" coverage.json
-          if git diff --quiet -- coverage.json && [ -n "$(git ls-files coverage.json)" ]; then
-            echo "coverage.json unchanged"
-            exit 0
+          previous="$RUNNER_TEMP/previous-release"
+          mkdir -p "$previous"
+          range=()
+          releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=1")
+          if [[ $(jq length <<< "$releases") != 0 ]]; then
+            gh release download --repo "$GITHUB_REPOSITORY" --pattern gubal-manifest.json --dir "$previous"
+            commit=$(jq -r '.corpusCommit // empty' "$previous/gubal-manifest.json")
+            if [[ -n "$commit" ]]; then
+              git -C pack cat-file -e "$commit^{commit}"
+              range=("$commit..HEAD")
+            else
+              published=$(gh release view --repo "$GITHUB_REPOSITORY" --json publishedAt --jq .publishedAt)
+              range=("--since=$published")
+            fi
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          game=$(jq -er .gameVersion "$MANIFEST")
+          version=$(jq -er .translationVersion "$MANIFEST")
+          notes="$RUNNER_TEMP/release-notes.md"
+          if [[ "$LANGUAGE" == es-es ]]; then
+            printf 'Traducción al español para la versión de juego **%s**.\n\nGeneración de la traducción: **%s**. El estado de la traducción está en https://eorzealocalized.com/\n' "$game" "$version" > "$notes"
+            heading='Cambios desde la versión anterior'
+          else
+            printf '%s language pack for game version **%s**.\n\nTranslation generation: **%s**.\n' "$LANGUAGE" "$game" "$version" > "$notes"
+            heading='Changes since the previous release'
+          fi
+          if ((${#range[@]})); then
+            git -C pack log --no-merges --format='%B' "${range[@]}" -- corpus translations > "$RUNNER_TEMP/commits.txt"
+            sed -E 's/^[[:space:]*-]+//; s/[[:space:]]+$//' "$RUNNER_TEMP/commits.txt" |
+              grep -viE '^(Co-authored-by|Signed-off-by|Reviewed-by|Acked-by|Tested-by|Reported-by|Suggested-by|Change-Id):|^(WORKQUEUE|The READMEs?|README)\b|recount|Recuento|^$' > "$RUNNER_TEMP/changes.txt" || [[ $? == 1 ]]
+            count=$(wc -l < "$RUNNER_TEMP/changes.txt")
+            if ((count)); then
+              printf '\n## %s\n\n' "$heading" >> "$notes"
+              if [[ ${range[0]} == --since=* ]]; then
+                if [[ "$LANGUAGE" == es-es ]]; then
+                  printf 'Lista aproximada según la fecha de publicación.\n\n' >> "$notes"
+                else
+                  printf 'Approximate list based on the publication date.\n\n' >> "$notes"
+                fi
+              fi
+              sed -n '1,40s/^/- /p' "$RUNNER_TEMP/changes.txt" >> "$notes"
+              if ((count > 40)); then
+                if [[ "$LANGUAGE" == es-es ]]; then
+                  printf -- '- Cambios adicionales: %s.\n' "$((count - 40))" >> "$notes"
+                else
+                  printf -- '- Additional changes: %s.\n' "$((count - 40))" >> "$notes"
+                fi
+              fi
+            fi
+          fi
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.publication.outputs.tag }}
+          ZIP: ${{ steps.publication.outputs.zip }}
+          MANIFEST: ${{ steps.publication.outputs.manifest }}
+        run: gh release create "$TAG" "$ZIP#Language pack (zip)" "$MANIFEST#gubal-manifest.json" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+      - name: Commit the coverage
+        working-directory: pack
+        env:
+          TOKEN: ${{ secrets.CI_MERGE_TOKEN }}
+        run: |
+          cp "../build/${GITHUB_REPOSITORY##*/}.coverage.json" coverage.json
+          if git diff --quiet -- coverage.json && [[ -n $(git ls-files coverage.json) ]]; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add coverage.json
-          git commit -m "coverage.json"
-          # main may have moved during the build: a merge that landed meanwhile must not fail the release.
+          git commit -m coverage.json
           git pull --rebase "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" main
           git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main

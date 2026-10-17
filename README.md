@@ -1,60 +1,48 @@
 # ffxiv-language-pack-ci
 
-Shared workflows for `ffxiv-language-pack-<code>` repositories.
+Shared Linux workflows for `ffxiv-language-pack-<code>` repositories. .NET uses SDK 10; run steps use Bash.
 
-| Workflow | Use | Result |
-|---|---|---|
-| `validate.yml` | Language pack pull requests | Checks paths, corpus content and optional layouts. A new run cancels the previous validation for the same PR and validates the full corpus again. |
-| `auto-merge.yml` | Called by a language repository | Enables auto-merge. Required checks and reviews must be configured in the repository rules. |
-| `release.yml` | Changes to release inputs on `main`, or manual dispatch | Checks the source sync, builds and publishes the pack, then commits its coverage. Releases use a separate concurrency group and are not cancelled by validation. |
-| `test.yml` | Changes to CI scripts or tests | Checks Bash syntax and runs the path restriction tests. |
+| Workflow | Use |
+|---|---|
+| `validate.yml` | Checks changed paths, corpus structure, content and optional ULD layouts on pull requests. |
+| `release.yml` | Checks source sync, builds and publishes the pack, then commits coverage. |
+| `auto-merge.yml` | Enables auto-merge. Branch rules enforce checks and reviews. |
+| `check.yml` | Runs actionlint and checks the shared Dalamud setup. |
 
-A language repository calls a shared workflow from its own `.github/workflows/`:
+## Language repositories
 
-```yaml
-jobs:
-  validate:
-    uses: ashdam/ffxiv-language-pack-ci/.github/workflows/validate.yml@main
-    with:
-      language: es-es
-    secrets: inherit
-```
+Copy `validate.yml` and `release.yml` from `workflows/` verbatim to each language repository’s `.github/workflows/`.
+Copy `auto-merge.yml` only to Italian, Polish and Brazilian Portuguese. Spanish has no auto-merge workflow.
+The workflows read the language and repository from `pack.json`. The optional shared `language` input checks an expected language.
+
+Keep the required reviews and checks in repository rules. `pull_request_target` does not check out or run PR content.
 
 ## Validation
 
-- `scripts/validate-pr.sh` checks paths changed from the pull request merge base before dependencies are downloaded. It rejects workflow edits, renamed paths and non-regular files. Supported release trigger updates are allowed.
-- CorpusValidator checks source and target content and baseline metadata without an installed game.
-- PackBuilder checks layout definitions against the original ULD files. The source hash and node fields must match; only declared font-size bytes may change.
-- The layout action uses the Tools checkout and .NET setup from the validation job.
-- Release checks cover the built pack, font character support and packaged ULD files.
+The validation workflow checks changed paths against the PR merge base before it downloads dependencies.
+Workflow edits must match a file in the shared `workflows/` directory. Data files must be regular, non-executable files.
+Renames are rejected except `glossary/excluded-rows.json` to `inventory-exclusions.json`.
 
-The job summary contains the path and corpus reports. The automatic PR comment contains the corpus report.
+CorpusValidator checks source and target structure, content and baseline metadata without the game.
+PackBuilder checks layout definitions against original game files. Only declared font-size bytes may change.
+The summary contains path and content reports. The PR comment contains the content report.
 
-## Coverage
+## Publication
 
-PackBuilder calls `LocalizationKit --inventory --format json`. It includes that document in the pack manifest and writes a copy beside the archive.
+GitHub Actions is the only publication path. A local build does not publish.
+Release verifies source sync and packaged ULD files. The build stamp must match clean source commits and the manifest inside the ZIP.
+Release notes use corpus commits since the published manifest. Spanish notes use Spanish; other packs use English.
 
-After publication, the release workflow copies the document to `coverage.json` and commits it to the language repository with `CI_MERGE_TOKEN`. The web reads that file. The release path filter excludes `coverage.json`, so this commit does not start another release. PR validation does not update coverage.
+PackBuilder writes coverage beside the archive. After publication, Release commits that file as `coverage.json`.
+The release path filter excludes `coverage.json` to prevent another release. Concurrent releases for one repository do not run together.
 
-## Tests
+## Dependencies and permissions
 
-`tests/validate-layout-paths.sh` checks normal pack files, file modes and workflow restrictions.
-
-`validate-new-sheets.sh` and `validate-patch-sync.sh` use an unsupported script interface and are not run. Their content cases belong in CorpusValidator tests.
-
-## Secrets and repository rules
-
-| Secret | Use |
+| Setting | Use |
 |---|---|
-| `CI_READ_TOKEN` | Reads the private Tools and game-sheet repositories. Required for release; validation can use the workflow token when it has access. |
-| `CI_MERGE_TOKEN` | Writes the coverage commit. Also enables auto-merge when that workflow is called. |
+| `CI_READ_TOKEN` | Reads Tools and game sheets. Required for release; validation can fall back to the workflow token. |
+| `CI_MERGE_TOKEN` | Writes coverage and enables auto-merge. |
 
-Language repositories must configure the current validation status as a required check. A language with a lead must require the lead's review through `CODEOWNERS` and branch rules.
-
-Enable repository auto-merge only when the language repository calls that workflow. Without required branch rules, `gh pr merge --auto` can merge immediately.
-
-## Permissions
-
-Each job requests its own permissions. PR files are read as data; validation code comes from CI and Tools. Checkouts do not retain credentials.
-
-External actions are pinned by commit. The Dalamud archive is pinned by revision and hash.
+PR files are data. Validation code comes from CI and Tools; checkouts do not retain credentials.
+External actions are pinned by commit. `actions/setup-dalamud` verifies the pinned archive SHA-256 and caches `Lumina.dll` and `Lumina.Excel.dll`.
+Tools builds, layout validation and pack releases use that action.

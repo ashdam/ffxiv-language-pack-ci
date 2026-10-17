@@ -1,0 +1,12 @@
+name: Auto-merge
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+permissions: {}
+jobs:
+  enable:
+    uses: ashdam/ffxiv-language-pack-ci/.github/workflows/auto-merge.yml@main
+    permissions:
+      contents: write
+      pull-requests: write
+    secrets: inherit
