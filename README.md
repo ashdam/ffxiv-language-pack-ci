@@ -44,5 +44,5 @@ The release path filter excludes `coverage.json` to prevent another release. Con
 | `CI_MERGE_TOKEN` | Writes coverage and enables auto-merge. |
 
 PR files are data. Validation code comes from CI and Tools; checkouts do not retain credentials.
-External actions are pinned by commit. `actions/setup-dalamud` verifies the pinned archive SHA-256 and caches `Lumina.dll` and `Lumina.Excel.dll`.
+External actions are pinned by commit. `actions/setup-dalamud` verifies the pinned archive SHA-256 and prepares the complete runtime.
 Tools builds, layout validation and pack releases use that action.
