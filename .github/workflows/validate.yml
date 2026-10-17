@@ -6,7 +6,7 @@ on:
     inputs:
       language:
         description: "The [target.*] suffix: es-es, it, pt-br, pl."
-        required: true
+        required: false
         type: string
     secrets:
       CI_READ_TOKEN:
@@ -22,6 +22,9 @@ jobs:
   validate:
     name: "Validate paths and corpus"
     runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: "read"
       pull-requests: "write"
@@ -49,7 +52,62 @@ jobs:
           BASE_SHA: "${{ github.event.pull_request.base.sha }}"
           HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
         run: |
-          bash .ci/scripts/validate-pr.sh "$BASE_SHA" "$HEAD_SHA" path-report.md
+          set -euo pipefail
+          base=$BASE_SHA
+          head=$HEAD_SHA
+          report=path-report.md
+          repo=.
+          base=$(git -C "$repo" rev-parse --verify "$base^{commit}")
+          head=$(git -C "$repo" rev-parse --verify "$head^{commit}")
+          base=$(git -C "$repo" merge-base "$base" "$head")
+          problems=()
+          while IFS= read -r -d '' status && IFS= read -r -d '' path; do
+            kind=${status:0:1}
+            if [[ $kind = R || $kind = C ]]; then
+              IFS= read -r -d '' destination
+              if [[ $kind = R && $path = glossary/excluded-rows.json && $destination = inventory-exclusions.json ]]; then
+                path=$destination
+                kind=A
+              else
+                problems+=("Renamed or copied path: $path -> $destination")
+                continue
+              fi
+            fi
+            if [[ $path == .github/workflows/* ]]; then
+              canonical=".ci/workflows/${path##*/}"
+              mode=$(git -C "$repo" ls-tree "$head" -- "$path")
+              if [[ $kind != D && -f "$canonical" && ${mode%% *} == 100644 ]] &&
+                 git -C "$repo" show "$head:$path" | cmp -s - "$canonical"; then
+                continue
+              fi
+              problems+=("Workflow must match the shared template: $path")
+              continue
+            fi
+            if [[ $kind == D ]]; then continue; fi
+            mode=$(git -C "$repo" ls-tree "$head" -- "$path")
+            if [[ ${mode%% *} != 100644 ]]; then
+              problems+=("Data must be a regular non-executable file: $path")
+            fi
+          done < <(git -C "$repo" diff --name-status -z --find-renames "$base" "$head" --)
+          if ((${#problems[@]})); then
+            printf '**Path restrictions failed.**\n\n' > "$report"
+            printf '%s\n' "${problems[@]}" >> "$report"
+            cat "$report"
+            exit 1
+          fi
+          printf 'Changed paths satisfy the repository restrictions.\n' > "$report"
+
+      - name: Read pack identity
+        shell: bash
+        env:
+          EXPECTED_LANGUAGE: "${{ inputs.language }}"
+        run: |
+          language=$(jq -er '.language | ascii_downcase' pack.json)
+          [[ "$language" =~ ^[a-z]{2,3}(-[a-z0-9]{2,8})*$ ]]
+          [[ -z "$EXPECTED_LANGUAGE" || "$EXPECTED_LANGUAGE" == "$language" ]]
+          [[ $(jq -er .repo pack.json) == "$GITHUB_REPOSITORY" ]]
+          [[ "$GITHUB_REPOSITORY" == */ffxiv-language-pack-"$language" ]]
+          printf 'LANGUAGE=%s\n' "$language" >> "$GITHUB_ENV"
 
       # The English rows the macro check compares against. Shallow: the history is not needed.
       - name: "Checkout the English corpus"
@@ -77,39 +135,28 @@ jobs:
       - name: "Validate ULD layouts"
         uses: ./.ci/actions/validate-layouts
         with:
-          language: ${{ inputs.language }}
+          language: ${{ env.LANGUAGE }}
           read-token: ${{ secrets.CI_READ_TOKEN || github.token }}
 
       - name: "Validate content"
-        shell: "pwsh"
         env:
-          LANGUAGE: "${{ inputs.language }}"
           BASE_SHA: "${{ github.event.pull_request.base.sha }}"
         run: |
-          $baseline = Join-Path $env:RUNNER_TEMP 'corpus-baseline'
-          New-Item -ItemType Directory -Force -Path $baseline | Out-Null
-          $archive = Join-Path $env:RUNNER_TEMP 'corpus-baseline.tar'
-          git archive --format=tar --output=$archive $env:BASE_SHA
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          tar -xf $archive -C $baseline
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $config = Join-Path $env:RUNNER_TEMP 'validator.ini'
-          $ini = @(
-            '[common]'
-            "source = $env:GITHUB_WORKSPACE/.corpus-en"
-            "[target.$env:LANGUAGE]"
-            "dir = $env:GITHUB_WORKSPACE"
-          )
-          $targetReviews = "$env:GITHUB_WORKSPACE/reviews/validator-reviews.json"
-          if (Test-Path -LiteralPath $targetReviews) { $ini += "reviews = $targetReviews" }
-          $ini += @(
-            '[CorpusExtractor]'
-            "excluded = $env:GITHUB_WORKSPACE/.corpus-en/glossary/excluded-rows.json"
-          )
-          $ini | Set-Content -LiteralPath $config
-          $env:FF14_TOOLS_CONFIG = $config
-          dotnet run --project .tools/CorpusValidator -c Release -- --language $env:LANGUAGE --baseline $baseline --json validate-report.json --markdown validate-report.md
-          exit $LASTEXITCODE
+          baseline="$RUNNER_TEMP/corpus-baseline"
+          archive="$RUNNER_TEMP/corpus-baseline.tar"
+          mkdir -p "$baseline"
+          git archive --format=tar --output="$archive" "$BASE_SHA"
+          tar -xf "$archive" -C "$baseline"
+          config="$RUNNER_TEMP/validator.ini"
+          {
+            printf '[common]\nsource = %s/.corpus-en\n' "$GITHUB_WORKSPACE"
+            printf '[target.%s]\ndir = %s\n' "$LANGUAGE" "$GITHUB_WORKSPACE"
+            if [[ -f reviews/validator-reviews.json ]]; then
+              printf 'reviews = %s/reviews/validator-reviews.json\n' "$GITHUB_WORKSPACE"
+            fi
+            printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/glossary/excluded-rows.json\n' "$GITHUB_WORKSPACE"
+          } > "$config"
+          FF14_TOOLS_CONFIG="$config" dotnet run --project .tools/CorpusValidator -c Release -- --language "$LANGUAGE" --baseline "$baseline" --json validate-report.json --markdown validate-report.md
       # The summary shows on every run. The comment needs a write token, which a fork's run does not get.
       - name: "Report the result"
         if: "always()"
