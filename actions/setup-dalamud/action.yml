@@ -3,14 +3,7 @@ description: Verify and prepare the pinned Dalamud runtime for .NET tools.
 runs:
   using: composite
   steps:
-    - name: Restore Dalamud libraries
-      id: cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-      with:
-        path: ${{ runner.temp }}/dalamud
-        key: dalamud-runtime-${{ runner.os }}-2343ab848def4f749a8b7ecf9a139e82f38801a8f631f6b55caf748c768aab4c
     - name: Download Dalamud libraries
-      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         DALAMUD_SHA256: 2343ab848def4f749a8b7ecf9a139e82f38801a8f631f6b55caf748c768aab4c
