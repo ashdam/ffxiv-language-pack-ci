@@ -65,7 +65,11 @@ jobs:
             kind=${status:0:1}
             if [[ $kind = R || $kind = C ]]; then
               IFS= read -r -d '' destination
-              if [[ $kind = R && $path = glossary/excluded-rows.json && $destination = inventory-exclusions.json ]]; then
+              if [[ $kind = R && (
+                ( $path = glossary/excluded-rows.json && $destination = inventory-exclusions.json ) ||
+                ( $path = glossary/bnpc-override.json && $destination = glossary/bnpc-canonical-names.json ) ||
+                ( $path = glossary/enpc-override.json && $destination = glossary/enpc-canonical-names.json )
+              ) ]]; then
                 path=$destination
                 kind=A
               else
