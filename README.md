@@ -24,7 +24,7 @@ Workflow edits must match a file in the shared `workflows/` directory. Data file
 Renames are rejected except `glossary/excluded-rows.json` to `inventory-exclusions.json`.
 
 CorpusValidator checks source and target structure, content and baseline metadata without the game.
-PackBuilder checks layout definitions against original game files. Only declared font-size bytes may change.
+PackBuilder checks layout definitions against original game files. Only declared font-size and position bytes may change.
 The summary contains path and content reports. The PR comment contains the content report.
 
 ## Publication
