@@ -158,7 +158,7 @@ jobs:
             if [[ -f reviews/validator-reviews.json ]]; then
               printf 'reviews = %s/reviews/validator-reviews.json\n' "$GITHUB_WORKSPACE"
             fi
-            printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/glossary/excluded-rows.json\n' "$GITHUB_WORKSPACE"
+            printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
           } > "$config"
           FF14_TOOLS_CONFIG="$config" dotnet run --project .tools/CorpusValidator -c Release -- --language "$LANGUAGE" --baseline "$baseline" --json validate-report.json --markdown validate-report.md
       # The summary shows on every run. The comment needs a write token, which a fork's run does not get.

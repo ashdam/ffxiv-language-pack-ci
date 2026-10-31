@@ -80,7 +80,7 @@ jobs:
           {
             printf '[common]\ngame = %s/game-sheets\nsource = %s/corpus-en\n' "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
             printf '[target.%s]\ndir = %s/pack\nout = %s/build/Gubal Library (%s)\n' "$LANGUAGE" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" "${LANGUAGE^^}"
-            printf '[CorpusExtractor]\nexcluded = %s/corpus-en/glossary/excluded-rows.json\n' "$GITHUB_WORKSPACE"
+            printf '[CorpusExtractor]\nexcluded = %s/corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
             printf '[PackBuilder]\ninventory = %s/Tools/LocalizationKit/LocalizationKit.csproj\n' "$GITHUB_WORKSPACE"
           } > "$config"
           printf 'FF14_TOOLS_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
