@@ -78,6 +78,9 @@ jobs:
               fi
             fi
             if [[ $path == .github/workflows/* ]]; then
+              if [[ $kind == D && $path == .github/workflows/auto-merge.yml ]]; then
+                continue
+              fi
               canonical=".ci/workflows/${path##*/}"
               mode=$(git -C "$repo" ls-tree "$head" -- "$path")
               if [[ $kind != D && -f "$canonical" && ${mode%% *} == 100644 ]] &&
