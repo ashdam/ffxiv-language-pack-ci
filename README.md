@@ -6,21 +6,21 @@ Shared Linux workflows for `ffxiv-language-pack-<code>` repositories. .NET uses 
 |---|---|
 | `validate.yml` | Checks changed paths, corpus structure, content and optional ULD layouts on pull requests. |
 | `release.yml` | Checks source sync, builds and publishes the pack, then commits coverage. |
-| `auto-merge.yml` | Enables auto-merge. Branch rules enforce checks and reviews. |
 | `check.yml` | Runs actionlint and checks the shared Dalamud setup. |
 
 ## Language repositories
 
 Copy `validate.yml` and `release.yml` from `workflows/` verbatim to each language repository’s `.github/workflows/`.
-Copy `auto-merge.yml` only to Italian, Polish and Brazilian Portuguese. Spanish has no auto-merge workflow.
+Language repositories must not enable automatic PR merges.
 The workflows read the language and repository from `pack.json`. The optional shared `language` input checks an expected language.
 
-Keep the required reviews and checks in repository rules. `pull_request_target` does not check out or run PR content.
+Keep the required reviews and checks in repository rules.
 
 ## Validation
 
 The validation workflow checks changed paths against the PR merge base before it downloads dependencies.
 Workflow edits must match a file in the shared `workflows/` directory. Data files must be regular, non-executable files.
+The `auto-merge.yml` workflow may be deleted.
 Renames are rejected except `glossary/excluded-rows.json` to `inventory-exclusions.json`.
 
 CorpusValidator checks source and target structure, content and baseline metadata without the game.
@@ -41,7 +41,7 @@ The release path filter excludes `coverage.json` to prevent another release. Con
 | Setting | Use |
 |---|---|
 | `CI_READ_TOKEN` | Reads Tools and game sheets. Required for release; validation can fall back to the workflow token. |
-| `CI_MERGE_TOKEN` | Writes coverage and enables auto-merge. |
+| `CI_MERGE_TOKEN` | Writes coverage. |
 
 PR files are data. Validation code comes from CI and Tools; checkouts do not retain credentials.
 External actions are pinned by commit. `actions/setup-dalamud` downloads the complete runtime without a cache and verifies the pinned archive SHA-256.
