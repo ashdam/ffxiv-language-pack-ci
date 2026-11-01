@@ -1,10 +1,10 @@
 name: Check workflows
 on:
   pull_request:
-    paths: [".github/workflows/**", "actions/**", "workflows/**"]
+    paths: [".github/workflows/**", "actions/**"]
   push:
     branches: [main]
-    paths: [".github/workflows/**", "actions/**", "workflows/**"]
+    paths: [".github/workflows/**", "actions/**"]
 permissions:
   contents: read
 jobs:
@@ -24,6 +24,6 @@ jobs:
           printf '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  %s\n' "$archive" | sha256sum --check
           tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
       - name: Check workflows and Bash
-        run: '"$RUNNER_TEMP/actionlint" .github/workflows/*.yml workflows/*.yml'
+        run: '"$RUNNER_TEMP/actionlint" .github/workflows/*.yml'
       - name: Set up Dalamud libraries
         uses: ./actions/setup-dalamud
