@@ -1,6 +1,6 @@
 # ffxiv-language-pack-ci
 
-Shared Linux workflows for `ffxiv-language-pack-<code>` repositories. .NET uses SDK 10; run steps use Bash.
+Shared Linux workflows for FFXIV language packs.
 
 | Workflow | Use |
 |---|---|
@@ -8,33 +8,24 @@ Shared Linux workflows for `ffxiv-language-pack-<code>` repositories. .NET uses 
 | `release.yml` | Checks source sync, builds and publishes the pack, then commits coverage. |
 | `check.yml` | Runs actionlint and checks the shared Dalamud setup. |
 
-## Language repositories
+## Setup
 
-Copy `validate.yml` and `release.yml` from `workflows/` verbatim to each language repository’s `.github/workflows/`.
-Language repositories must not enable automatic PR merges.
-The workflows read the language and repository from `pack.json`. The optional shared `language` input checks an expected language.
+Each pack defines its triggers and calls the reusable workflows in this repository's `.github/workflows/`.
+Pack identity comes from `pack.json`. The optional `language` input checks an expected language.
 
-Keep the required reviews and checks in repository rules.
+Protect `.github/` with CODEOWNERS and required code owner reviews. Dismiss approvals after new commits.
+Keep automatic PR merging disabled.
 
 ## Validation
 
-The validation workflow checks changed paths against the PR merge base before it downloads dependencies.
-Workflow edits must match a file in the shared `workflows/` directory. Data files must be regular, non-executable files.
-The `auto-merge.yml` workflow may be deleted.
-Renames are rejected except `glossary/excluded-rows.json` to `inventory-exclusions.json`.
-
-CorpusValidator checks source and target structure, content and baseline metadata without the game.
-PackBuilder checks layout definitions against original game files. Only declared font-size and position bytes may change.
-The summary contains path and content reports. The PR comment contains the content report.
+CorpusValidator checks corpus structure, content and metadata. PackBuilder checks optional ULD layouts against game files.
+Changed data files must be regular and non-executable. Workflow changes require code owner approval.
+The run summary and PR comment show the results table and a link to the complete JSON report as a ZIP artifact.
 
 ## Publication
 
-GitHub Actions is the only publication path. A local build does not publish.
-Release verifies source sync and packaged ULD files. The build stamp must match clean source commits and the manifest inside the ZIP.
-Release notes use corpus commits since the published manifest. Spanish notes use Spanish; other packs use English.
-
-PackBuilder writes coverage beside the archive. After publication, Release commits that file as `coverage.json`.
-The release path filter excludes `coverage.json` to prevent another release. Concurrent releases for one repository do not run together.
+Release checks source sync, builds the pack and publishes it through GitHub Actions.
+It commits `coverage.json`; this file must not trigger another release. Releases for one pack run sequentially.
 
 ## Dependencies and permissions
 
@@ -43,6 +34,5 @@ The release path filter excludes `coverage.json` to prevent another release. Con
 | `CI_READ_TOKEN` | Reads Tools and game sheets. Required for release; validation can fall back to the workflow token. |
 | `CI_MERGE_TOKEN` | Writes coverage. |
 
-PR files are data. Validation code comes from CI and Tools; checkouts do not retain credentials.
-External actions are pinned by commit. `actions/setup-dalamud` downloads the complete runtime without a cache and verifies the pinned archive SHA-256.
-Tools builds, layout validation and pack releases use that action.
+Treat PR files as data. Run validation code from trusted CI and Tools checkouts, without stored Git credentials.
+Pin external actions by commit. The shared `actions/setup-dalamud` action verifies the runtime archive checksum.

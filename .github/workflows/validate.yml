@@ -77,19 +77,6 @@ jobs:
                 continue
               fi
             fi
-            if [[ $path == .github/workflows/* ]]; then
-              if [[ $kind == D && $path == .github/workflows/auto-merge.yml ]]; then
-                continue
-              fi
-              canonical=".ci/workflows/${path##*/}"
-              mode=$(git -C "$repo" ls-tree "$head" -- "$path")
-              if [[ $kind != D && -f "$canonical" && ${mode%% *} == 100644 ]] &&
-                 git -C "$repo" show "$head:$path" | cmp -s - "$canonical"; then
-                continue
-              fi
-              problems+=("Workflow must match the shared template: $path")
-              continue
-            fi
             if [[ $kind == D ]]; then continue; fi
             mode=$(git -C "$repo" ls-tree "$head" -- "$path")
             if [[ ${mode%% *} != 100644 ]]; then
@@ -146,9 +133,12 @@ jobs:
           read-token: ${{ secrets.CI_READ_TOKEN || github.token }}
 
       - name: "Validate content"
+        id: content-validation
         env:
           BASE_SHA: "${{ github.event.pull_request.base.sha }}"
         run: |
+          report="validate-report-$(date -u +'%Y-%m-%d_%H-%M-%SZ')"
+          printf 'report-name=%s\n' "$report" >> "$GITHUB_OUTPUT"
           baseline="$RUNNER_TEMP/corpus-baseline"
           archive="$RUNNER_TEMP/corpus-baseline.tar"
           mkdir -p "$baseline"
@@ -163,13 +153,33 @@ jobs:
             fi
             printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
           } > "$config"
-          FF14_TOOLS_CONFIG="$config" dotnet run --project .tools/CorpusValidator -c Release -- --language "$LANGUAGE" --baseline "$baseline" --json validate-report.json --markdown validate-report.md
+          FF14_TOOLS_CONFIG="$config" dotnet run --project .tools/CorpusValidator -c Release -- --language "$LANGUAGE" --baseline "$baseline" --json "$report.json" --markdown validate-report.md
+
+      - name: "Upload the JSON report"
+        id: report-artifact
+        if: "always() && steps.content-validation.outputs.report-name != '' && hashFiles(format('{0}.json', steps.content-validation.outputs.report-name)) != ''"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.content-validation.outputs.report-name }}
+          path: ${{ steps.content-validation.outputs.report-name }}.json
+          if-no-files-found: error
+
       # The summary shows on every run. The comment needs a write token, which a fork's run does not get.
       - name: "Report the result"
         if: "always()"
         shell: "bash"
+        env:
+          ARTIFACT_URL: ${{ steps.report-artifact.outputs.artifact-url }}
         run: |
-          for report in path-report.md validate-report.md; do
+          summary="$RUNNER_TEMP/validate-summary.md"
+          : > "$summary"
+          if [ -s validate-report.md ]; then
+            awk '/^\|/ { print }' validate-report.md > "$summary"
+          fi
+          if [ -n "$ARTIFACT_URL" ]; then
+            printf '\n[Full report (ZIP)](%s)\n' "$ARTIFACT_URL" >> "$summary"
+          fi
+          for report in path-report.md "$summary"; do
             if [ -s "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
           done
 
@@ -181,6 +191,6 @@ jobs:
           GH_TOKEN: "${{ github.token }}"
           PR: "${{ github.event.pull_request.number }}"
         run: |
-          if [ -s validate-report.md ]; then
-            gh pr comment "$PR" --body-file validate-report.md --repo "$GITHUB_REPOSITORY"
+          if [ -s "$RUNNER_TEMP/validate-summary.md" ]; then
+            gh pr comment "$PR" --body-file "$RUNNER_TEMP/validate-summary.md" --repo "$GITHUB_REPOSITORY"
           fi
