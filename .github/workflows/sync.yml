@@ -1,0 +1,189 @@
+name: Sync language packs
+
+on:
+  workflow_call:
+    inputs:
+      reader-client-id:
+        description: Reader App client ID.
+        required: true
+        type: string
+      writer-client-id:
+        description: Writer App client ID.
+        required: true
+        type: string
+    secrets:
+      LOCALIZATION_READER_PRIVATE_KEY:
+        required: true
+      LOCALIZATION_WRITER_PRIVATE_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-language-packs
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'ashdam/ffxiv-corpus-en' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [es-es, it, pl, pt-br]
+    env:
+      LANGUAGE: ${{ matrix.language }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Create dependency read token
+        id: read-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ inputs.reader-client-id }}
+          private-key: ${{ secrets.LOCALIZATION_READER_PRIVATE_KEY }}
+          owner: ashdam
+          repositories: |
+            corpus-extractor
+            ffxiv-game-sheets
+          permission-contents: read
+
+      - name: Create pack read token
+        id: pack-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ inputs.writer-client-id }}
+          private-key: ${{ secrets.LOCALIZATION_WRITER_PRIVATE_KEY }}
+          owner: ashdam
+          repositories: ffxiv-language-pack-${{ matrix.language }}
+          permission-contents: read
+
+      - name: Checkout the language pack
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ashdam/ffxiv-language-pack-${{ matrix.language }}
+          ref: main
+          path: pack
+          fetch-depth: 0
+          token: ${{ steps.pack-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Checkout the English source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          path: corpus-en
+          persist-credentials: false
+
+      - name: Checkout the tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ashdam/corpus-extractor
+          ref: main
+          path: Tools
+          token: ${{ steps.read-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Checkout shared actions
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ashdam/ffxiv-language-pack-ci
+          ref: main
+          path: .ci
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: 10.0.402
+
+      - name: Set up Dalamud libraries
+        uses: ./.ci/actions/setup-dalamud
+
+      - name: Write tools.ini
+        run: |
+          set -euo pipefail
+          [[ $(jq -er '.language | ascii_downcase' pack/pack.json) == "$LANGUAGE" ]]
+          [[ $(jq -er .repo pack/pack.json) == "ashdam/ffxiv-language-pack-$LANGUAGE" ]]
+          config="$RUNNER_TEMP/tools.ini"
+          {
+            printf '[common]\ngame = %s/game-sheets\nsource = %s/corpus-en\n' "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
+            printf '[target.%s]\ndir = %s/pack\nout = %s/build/pack\n' "$LANGUAGE" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
+            printf '[CorpusExtractor]\nexcluded = %s/corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
+            printf '[PackBuilder]\ninventory = %s/Tools/LocalizationKit/LocalizationKit.csproj\n' "$GITHUB_WORKSPACE"
+          } > "$config"
+          printf 'FF14_TOOLS_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
+
+      - name: Sync the target
+        id: changes
+        run: |
+          set -euo pipefail
+          dotnet run --project Tools/CorpusExtractor -c Release -- --language "$LANGUAGE" --sync-target
+          git -C pack add -- corpus inventory-exclusions.json
+          if git -C pack diff --cached --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout game sheets
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ashdam/ffxiv-game-sheets
+          ref: main
+          path: game-sheets
+          token: ${{ steps.read-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Check source sync and build the full pack
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          dotnet run --project Tools/CorpusExtractor -c Release -- --language "$LANGUAGE" --sync-target --dry-run --strict
+          dotnet run --project Tools/PackBuilder -c Release -- --language "$LANGUAGE"
+          dotnet run --project Tools/PackBuilder -c Release -- --language "$LANGUAGE" --verify-pack-layouts "build/ffxiv-language-pack-$LANGUAGE.zip"
+
+      - name: Create pull request token
+        id: write-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ inputs.writer-client-id }}
+          private-key: ${{ secrets.LOCALIZATION_WRITER_PRIVATE_KEY }}
+          owner: ashdam
+          repositories: ffxiv-language-pack-${{ matrix.language }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Create or update the sync pull request
+        id: pull-request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.write-token.outputs.token }}
+          path: pack
+          base: main
+          branch: sync/corpus-en
+          delete-branch: true
+          sign-commits: true
+          add-paths: |
+            corpus/**
+            inventory-exclusions.json
+          commit-message: ${{ matrix.language == 'es-es' && 'Sincroniza el corpus con el original inglés' || 'Sync the corpus with the English source' }}
+          title: ${{ matrix.language == 'es-es' && 'Sincroniza el corpus con el original inglés' || 'Sync the corpus with the English source' }}
+          body: |
+            Sync corpus rows and the game version with the [English source](https://github.com/ashdam/ffxiv-corpus-en/commit/${{ github.sha }}).
+            Preserve existing translations and their source hashes.
+
+      - name: Report the result
+        env:
+          PR_URL: ${{ steps.pull-request.outputs.pull-request-url }}
+          OPERATION: ${{ steps.pull-request.outputs.pull-request-operation }}
+        run: |
+          if [[ -n "$PR_URL" ]]; then
+            printf '%s: [%s](%s) (%s)\n' "$LANGUAGE" 'Sync pull request' "$PR_URL" "$OPERATION" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '%s: no sync pull request is needed.\n' "$LANGUAGE" >> "$GITHUB_STEP_SUMMARY"
+          fi
