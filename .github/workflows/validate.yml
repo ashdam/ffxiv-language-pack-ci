@@ -116,10 +116,23 @@ jobs:
         uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
         with:
           repository: "ashdam/corpus-extractor"
-          ref: "main"
+          ref: "878f339f6b0d40d0217b2ea6b69c5b4ae4a63710"
           path: ".tools"
           token: "${{ secrets.CI_READ_TOKEN || github.token }}"
           persist-credentials: false
+
+      - name: "Checkout original banner texture metadata"
+        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
+        with:
+          repository: "ashdam/ffxiv-game-sheets"
+          ref: "main"
+          path: ".game-sheets"
+          token: "${{ secrets.CI_READ_TOKEN || github.token }}"
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /ffxivgame.ver
+            /metadata/banner-textures.json
 
       - name: "Set up .NET"
         uses: "actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1"
@@ -136,6 +149,23 @@ jobs:
         id: content-validation
         env:
           BASE_SHA: "${{ github.event.pull_request.base.sha }}"
+          VALIDATOR_RULES: >-
+            lp-structure-json,
+            lp-structure-file-identity,
+            lp-structure-unique-game-key,
+            lp-structure-delivery-metadata,
+            lp-structure-glossary,
+            lp-structure-game-version-unique,
+            lp-structure-game-version-match,
+            lp-structure-row-alignment,
+            lp-structure-target-exclusions,
+            lp-structure-validator-reviews,
+            lp-macros-syntax,
+            lp-macros-speaker-label,
+            lp-macros-icons,
+            lp-textures-banners-format,
+            lp-textures-banners-variants,
+            lp-textures-banners-dimensions
         run: |
           report="validate-report-$(date -u +'%Y-%m-%d_%H-%M-%SZ')"
           printf 'report-name=%s\n' "$report" >> "$GITHUB_OUTPUT"
@@ -147,13 +177,19 @@ jobs:
           config="$RUNNER_TEMP/validator.ini"
           {
             printf '[common]\nsource = %s/.corpus-en\n' "$GITHUB_WORKSPACE"
+            printf 'sheets = %s/.game-sheets\n' "$GITHUB_WORKSPACE"
             printf '[target.%s]\ndir = %s\n' "$LANGUAGE" "$GITHUB_WORKSPACE"
             if [[ -f reviews/validator-reviews.json ]]; then
               printf 'reviews = %s/reviews/validator-reviews.json\n' "$GITHUB_WORKSPACE"
             fi
             printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
           } > "$config"
-          FF14_TOOLS_CONFIG="$config" dotnet run --project .tools/CorpusValidator -c Release -- --language "$LANGUAGE" --baseline "$baseline" --json "$report.json" --markdown validate-report.md
+          FF14_TOOLS_CONFIG="$config" dotnet run --project .tools/CorpusValidator -c Release -- \
+            --lp "$GITHUB_WORKSPACE" \
+            --rules "$VALIDATOR_RULES" \
+            --baseline "$baseline" \
+            --json "$report.json" \
+            --markdown validate-report.md
 
       - name: "Upload the JSON report"
         id: report-artifact
