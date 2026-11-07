@@ -99,8 +99,26 @@ jobs:
           zip=$(jq -er '.zipPath | select(type == "string" and length > 0)' "$stamp")
           manifest=$(jq -er '.manifestPath | select(type == "string" and length > 0)' "$stamp")
           [[ $(realpath "$zip") == "$GITHUB_WORKSPACE/build/${GITHUB_REPOSITORY##*/}.zip" ]]
-          [[ $(realpath "$manifest") == "$GITHUB_WORKSPACE/build/Gubal Library (${LANGUAGE^^})/gubal-manifest.json" ]]
-          unzip -p "$zip" gubal-manifest.json | cmp - "$manifest"
+          [[ $(realpath "$manifest") == "$GITHUB_WORKSPACE/build/${GITHUB_REPOSITORY##*/}.release/gubal-manifest.json" ]]
+          python3 - "$zip" "$manifest" <<'PY'
+          import json
+          import os
+          import sys
+          import zipfile
+
+          archive_path, manifest_path = sys.argv[1:]
+          with open(manifest_path, encoding="utf-8") as stream:
+              published = json.load(stream)
+          with zipfile.ZipFile(archive_path) as archive:
+              embedded = json.loads(archive.read("gubal-manifest.json"))
+              sizes = {"downloadBytes": os.path.getsize(archive_path),
+                       "installedBytes": sum(entry.file_size for entry in archive.infolist())}
+          for key, value in sizes.items():
+              if value <= 0 or type(published.get(key)) is not int or published.pop(key) != value:
+                  raise SystemExit(f"Invalid {key} in the published pack manifest")
+          if published != embedded:
+              raise SystemExit("The published manifest does not match the archive")
+          PY
           tag=$(jq -er '.gameVersion + "_" + .translationVersion' "$manifest")
           [[ "$tag" =~ ^[0-9][0-9._-]*$ ]]
           [[ $(jq -er .tag "$stamp") == "$tag" ]]
