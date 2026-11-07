@@ -20,6 +20,11 @@ Keep automatic PR merging disabled.
 ## Validation
 
 CorpusValidator checks corpus structure, content and metadata. PackBuilder checks optional ULD layouts against game files.
+The explicit rule list in `validate.yml` checks LP structure, source alignment, metadata, glossary files,
+review files, macro syntax, speaker labels, icons and banner textures. Linguistic and heuristic rules are not selected.
+Tools is pinned to a commit that supports the selected rule names and parameters.
+Banner variants and dimensions use `metadata/banner-textures.json` and `ffxivgame.ver` from game-sheets.
+The workflow sets `sheets` under `[common]` in its generated `tools.ini`. No installed game is required.
 Changed data files must be regular and non-executable. Workflow changes require code owner approval.
 The run summary and PR comment show the results table and a link to the complete JSON report as a ZIP artifact.
 
