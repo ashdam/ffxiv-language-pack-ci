@@ -116,7 +116,7 @@ jobs:
         uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
         with:
           repository: "ashdam/corpus-extractor"
-          ref: "878f339f6b0d40d0217b2ea6b69c5b4ae4a63710"
+          ref: "main"
           path: ".tools"
           token: "${{ secrets.CI_READ_TOKEN || github.token }}"
           persist-credentials: false
