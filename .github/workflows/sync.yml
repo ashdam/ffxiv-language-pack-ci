@@ -167,7 +167,6 @@ jobs:
           base: main
           branch: sync/corpus-en
           delete-branch: true
-          sign-commits: true
           add-paths: |
             corpus/**
             inventory-exclusions.json
