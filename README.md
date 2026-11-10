@@ -6,7 +6,7 @@ Shared Linux workflows for FFXIV language packs.
 |---|---|
 | `validate.yml` | Checks changed paths, corpus structure, content and optional ULD layouts on pull requests. |
 | `release.yml` | Checks source sync, builds and publishes the pack, then commits coverage. |
-| `sync.yml` | Syncs each pack from its main branch and opens or updates one pull request. |
+| `sync.yml` | Syncs each pack and keeps its PR in draft until the full pack builds. |
 | `check.yml` | Runs actionlint and checks the shared Dalamud setup. |
 
 ## Setup
@@ -44,8 +44,8 @@ It commits `coverage.json`; this file must not trigger another release. Releases
 
 Pass App credentials from the source repository. Install Reader only on Tools and exported game sheets, with read-only contents access.
 Install Writer only on language packs, with contents and pull request write access.
-Sync builds changed packs before it opens a PR. Write tokens cover one pack.
-The `sync/corpus-en` branch is managed by the sync workflow. Keep manual changes on other branches.
+Sync opens a draft PR before the build and marks it ready only after the sync and full pack checks pass. Write tokens cover one pack.
+Fix layouts in `sync/corpus-en` and rerun sync. Pending corpus, exclusion and layout changes are preserved; merge conflicts stop the run.
 
 Treat PR files as data. Run validation code from trusted CI and Tools checkouts, without stored Git credentials.
 Pin external actions by commit. The shared `actions/setup-dalamud` action verifies the runtime archive checksum.
