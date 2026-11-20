@@ -70,18 +70,7 @@ jobs:
           while IFS= read -r -d '' status && IFS= read -r -d '' path; do
             kind=${status:0:1}
             if [[ $kind = R || $kind = C ]]; then
-              IFS= read -r -d '' destination
-              if [[ $kind = R && (
-                ( $path = glossary/excluded-rows.json && $destination = inventory-exclusions.json ) ||
-                ( $path = glossary/bnpc-override.json && $destination = glossary/bnpc-canonical-names.json ) ||
-                ( $path = glossary/enpc-override.json && $destination = glossary/enpc-canonical-names.json )
-              ) ]]; then
-                path=$destination
-                kind=A
-              else
-                problems+=("Renamed or copied path: $path -> $destination")
-                continue
-              fi
+              IFS= read -r -d '' path
             fi
             if [[ $kind == D ]]; then continue; fi
             mode=$(git -C "$repo" ls-tree "$head" -- "$path")
