@@ -117,12 +117,12 @@ jobs:
           persist-credentials: false
 
       - name: "Checkout original banner texture metadata"
-        id: game-sheets
+        id: banner-metadata
         uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
         with:
           repository: "ashdam/ffxiv-game-sheets"
           ref: "main"
-          path: ".game-sheets"
+          path: ".banner-metadata"
           token: "${{ secrets.CI_READ_TOKEN || github.token }}"
           persist-credentials: false
           sparse-checkout-cone-mode: false
@@ -179,7 +179,7 @@ jobs:
           config="$RUNNER_TEMP/validator.ini"
           {
             printf '[common]\nsource = %s/.corpus-en\n' "$GITHUB_WORKSPACE"
-            printf 'sheets = %s/.game-sheets\n' "$GITHUB_WORKSPACE"
+            printf 'sheets = %s/.banner-metadata\n' "$GITHUB_WORKSPACE"
             printf '[target.%s]\ndir = %s\n' "$LANGUAGE" "$GITHUB_WORKSPACE"
             printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
           } > "$config"
@@ -195,7 +195,7 @@ jobs:
         uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
         with:
           repository: "ashdam/ffxiv-game-sheets"
-          ref: "${{ steps.game-sheets.outputs.commit }}"
+          ref: "${{ steps.banner-metadata.outputs.commit }}"
           path: ".game-sheets"
           token: "${{ secrets.CI_READ_TOKEN || github.token }}"
           persist-credentials: false
