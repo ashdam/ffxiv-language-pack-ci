@@ -149,7 +149,9 @@ jobs:
             lp-structure-game-version-unique,
             lp-structure-game-version-match,
             lp-structure-row-alignment,
-            lp-structure-target-exclusions,
+            lp-structure-inventory-exclusions,
+            lp-structure-inventory-exclusion-hashes,
+            lp-structure-inventory-excluded-translations,
             lp-structure-validator-reviews,
             lp-macros-syntax,
             lp-macros-speaker-label,
@@ -176,9 +178,6 @@ jobs:
             printf '[common]\nsource = %s/.corpus-en\n' "$GITHUB_WORKSPACE"
             printf 'sheets = %s/.game-sheets\n' "$GITHUB_WORKSPACE"
             printf '[target.%s]\ndir = %s\n' "$LANGUAGE" "$GITHUB_WORKSPACE"
-            if [[ -f reviews/validator-reviews.json ]]; then
-              printf 'reviews = %s/reviews/validator-reviews.json\n' "$GITHUB_WORKSPACE"
-            fi
             printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
           } > "$config"
           FF14_TOOLS_CONFIG="$config" dotnet run --project .tools/CorpusValidator -c Release -- \
