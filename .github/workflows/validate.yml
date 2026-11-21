@@ -117,6 +117,7 @@ jobs:
           persist-credentials: false
 
       - name: "Checkout original banner texture metadata"
+        id: game-sheets
         uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
         with:
           repository: "ashdam/ffxiv-game-sheets"
@@ -133,13 +134,6 @@ jobs:
         uses: "actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1"
         with:
           dotnet-version: "10.0.402"
-
-      - name: "Validate ULD layouts"
-        if: github.event_name == 'pull_request'
-        uses: ./.ci/actions/validate-layouts
-        with:
-          language: ${{ env.LANGUAGE }}
-          read-token: ${{ secrets.CI_READ_TOKEN || github.token }}
 
       - name: "Validate content"
         id: content-validation
@@ -194,6 +188,37 @@ jobs:
             --json "$report.json" \
             --markdown validate-report.md
 
+      - name: "Checkout the game sheets"
+        if: github.event_name == 'pull_request'
+        uses: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
+        with:
+          repository: "ashdam/ffxiv-game-sheets"
+          ref: "${{ steps.game-sheets.outputs.commit }}"
+          path: ".game-sheets"
+          token: "${{ secrets.CI_READ_TOKEN || github.token }}"
+          persist-credentials: false
+
+      - name: "Set up Dalamud libraries"
+        if: github.event_name == 'pull_request'
+        uses: ./.ci/actions/setup-dalamud
+
+      - name: "Build the pack"
+        id: pack-build
+        if: github.event_name == 'pull_request'
+        run: |
+          config="$RUNNER_TEMP/pack-builder.ini"
+          build="$RUNNER_TEMP/pack-build"
+          {
+            printf '[common]\ngame = %s/.game-sheets\nsource = %s/.corpus-en\n' "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
+            printf '[target.%s]\ndir = %s\nout = %s/Gubal Library (%s)\n' "$LANGUAGE" "$GITHUB_WORKSPACE" "$build" "${LANGUAGE^^}"
+            printf '[CorpusExtractor]\nexcluded = %s/.corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
+            printf '[PackBuilder]\ninventory = %s/.tools/LocalizationKit/LocalizationKit.csproj\n' "$GITHUB_WORKSPACE"
+          } > "$config"
+          export FF14_TOOLS_CONFIG="$config"
+          mkdir -p "$build"
+          dotnet run --project .tools/PackBuilder -c Release -- --language "$LANGUAGE"
+          dotnet run --project .tools/PackBuilder -c Release -- --language "$LANGUAGE" --verify-pack-layouts "$build/${GITHUB_REPOSITORY##*/}.zip"
+
       - name: "Upload the JSON report"
         id: report-artifact
         if: "always() && steps.content-validation.outputs.report-name != '' && hashFiles(format('{0}.json', steps.content-validation.outputs.report-name)) != ''"
@@ -209,12 +234,17 @@ jobs:
         shell: "bash"
         env:
           ARTIFACT_URL: ${{ steps.report-artifact.outputs.artifact-url }}
+          PACK_BUILD: ${{ steps.pack-build.outcome }}
         run: |
           summary="$RUNNER_TEMP/validate-summary.md"
           : > "$summary"
           if [ -s validate-report.md ]; then
             awk '/^\|/ { print }' validate-report.md > "$summary"
           fi
+          case "$PACK_BUILD" in
+            success) printf '\nPackBuilder passed.\n' >> "$summary" ;;
+            failure) printf '\nPackBuilder failed. See the workflow log.\n' >> "$summary" ;;
+          esac
           if [ -n "$ARTIFACT_URL" ]; then
             printf '\n[Full report (ZIP)](%s)\n' "$ARTIFACT_URL" >> "$summary"
           fi
