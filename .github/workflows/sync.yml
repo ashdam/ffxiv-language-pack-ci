@@ -101,6 +101,27 @@ jobs:
           token: ${{ steps.read-token.outputs.token }}
           persist-credentials: false
 
+      - name: Checkout game sheets
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ashdam/ffxiv-game-sheets
+          ref: main
+          path: game-sheets
+          token: ${{ steps.read-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Check the source export
+        run: |
+          if ! jq -es '
+            (.[0].exportId | type == "string" and length > 0)
+            and (.[0].gameVersion | type == "string" and length > 0)
+            and .[0].exportId == .[1].exportId
+            and .[0].gameVersion == .[1].gameVersion
+          ' corpus-en/source-sync.json game-sheets/source-sync.json > /dev/null; then
+            printf 'Corpus EN and game sheets must come from the same source sync.\n' >&2
+            exit 1
+          fi
+
       - name: Checkout shared actions
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -124,7 +145,8 @@ jobs:
           [[ $(jq -er .repo pack/pack.json) == "ashdam/ffxiv-language-pack-$LANGUAGE" ]]
           config="$RUNNER_TEMP/tools.ini"
           {
-            printf '[common]\ngame = %s/game-sheets\nsource = %s/corpus-en\n' "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
+            printf '[common]\ngame = %s/game-sheets\nsheets = %s/game-sheets\nsource = %s/corpus-en\n' \
+              "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
             printf '[target.%s]\ndir = %s/pack\nout = %s/build/pack\n' "$LANGUAGE" "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE"
             printf '[CorpusExtractor]\nexcluded = %s/corpus-en/config/excluded-rows.json\n' "$GITHUB_WORKSPACE"
             printf '[PackBuilder]\ninventory = %s/Tools/LocalizationKit/LocalizationKit.csproj\n' "$GITHUB_WORKSPACE"
@@ -139,7 +161,7 @@ jobs:
           git -C pack read-tree --reset -u "$merged_tree"
           git -C pack reset --soft refs/remotes/origin/main
           unexpected=$(git -C pack diff --cached --name-only -- . \
-            ':!corpus/**' ':!inventory-exclusions.json')
+            ':!corpus/**' ':!inventory-exclusions.json' ':!layouts/**')
           if [[ -n "$unexpected" ]]; then
             printf 'Unexpected pending sync paths:\n%s\n' "$unexpected" >&2
             exit 1
@@ -149,6 +171,19 @@ jobs:
         run: |
           set -euo pipefail
           dotnet run --project Tools/CorpusExtractor -c Release -- --language "$LANGUAGE" --sync-target
+
+      - name: Select paths for the sync pull request
+        id: sync-paths
+        run: |
+          set -euo pipefail
+          {
+            printf 'paths<<SYNC_PATHS\ncorpus/**\ninventory-exclusions.json\n'
+            if [[ -n $(git -C pack status --porcelain --untracked-files=all -- layouts/) ]]; then
+              git -C pack reset --quiet HEAD -- layouts/
+              printf 'layouts/**\n'
+            fi
+            printf 'SYNC_PATHS\n'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create pull request token
         id: write-token
@@ -171,14 +206,13 @@ jobs:
           branch: sync/corpus-en
           delete-branch: true
           draft: always-true
-          add-paths: |
-            corpus/**
-            inventory-exclusions.json
+          add-paths: ${{ steps.sync-paths.outputs.paths }}
           commit-message: ${{ matrix.language == 'es-es' && 'Sincroniza el corpus con el original inglés' || 'Sync the corpus with the English source' }}
           title: ${{ matrix.language == 'es-es' && 'Sincroniza el corpus con el original inglés' || 'Sync the corpus with the English source' }}
           body: |
             Sync corpus rows and the game version with the [English source](https://github.com/ashdam/ffxiv-corpus-en/commit/${{ github.sha }}).
             Preserve existing translations and their source hashes.
+            Update layout checks against the matching game sheets export.
 
       - name: Check out the sync commit for validation
         if: steps.pull-request.outputs.pull-request-url != ''
@@ -193,22 +227,17 @@ jobs:
           fi
           git -C pack checkout --detach "$SYNC_HEAD"
 
-      - name: Checkout game sheets
-        if: steps.pull-request.outputs.pull-request-url != ''
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ashdam/ffxiv-game-sheets
-          ref: main
-          path: game-sheets
-          token: ${{ steps.read-token.outputs.token }}
-          persist-credentials: false
+      - name: Check source sync
+        id: check-sync
+        run: |
+          set -euo pipefail
+          dotnet run --project Tools/CorpusExtractor -c Release -- --language "$LANGUAGE" --sync-target --dry-run --strict
 
-      - name: Check source sync and build the full pack
+      - name: Build the full pack
         id: build
         if: steps.pull-request.outputs.pull-request-url != ''
         run: |
           set -euo pipefail
-          dotnet run --project Tools/CorpusExtractor -c Release -- --language "$LANGUAGE" --sync-target --dry-run --strict
           dotnet run --project Tools/PackBuilder -c Release -- --language "$LANGUAGE"
           dotnet run --project Tools/PackBuilder -c Release -- --language "$LANGUAGE" --verify-pack-layouts "build/ffxiv-language-pack-$LANGUAGE.zip"
 
@@ -229,12 +258,15 @@ jobs:
           PR_URL: ${{ steps.pull-request.outputs.pull-request-url }}
           OPERATION: ${{ steps.pull-request.outputs.pull-request-operation }}
           BUILD_RESULT: ${{ steps.build.outcome }}
+          SYNC_RESULT: ${{ steps.check-sync.outcome }}
         run: |
           if [[ -n "$PR_URL" ]]; then
             printf '%s: [%s](%s) (%s)\n' "$LANGUAGE" 'Sync pull request' "$PR_URL" "$OPERATION" >> "$GITHUB_STEP_SUMMARY"
             if [[ "$BUILD_RESULT" != success ]]; then
               printf 'The sync PR remains in draft. Fix its data and rerun sync.\n' >> "$GITHUB_STEP_SUMMARY"
             fi
-          else
+          elif [[ "$SYNC_RESULT" == success ]]; then
             printf '%s: no sync pull request is needed.\n' "$LANGUAGE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '%s: check the sync findings in the workflow log.\n' "$LANGUAGE" >> "$GITHUB_STEP_SUMMARY"
           fi
