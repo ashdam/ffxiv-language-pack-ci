@@ -9,7 +9,7 @@ on:
     secrets:
       CI_READ_TOKEN:
         required: true
-      CI_MERGE_TOKEN:
+      LOCALIZATION_WRITER_PRIVATE_KEY:
         required: true
 permissions: {}
 concurrency:
@@ -187,6 +187,15 @@ jobs:
               fi
             fi
           fi
+      - name: Create coverage token
+        id: coverage-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.LOCALIZATION_WRITER_CLIENT_ID }}
+          private-key: ${{ secrets.LOCALIZATION_WRITER_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -197,7 +206,7 @@ jobs:
       - name: Commit the coverage
         working-directory: pack
         env:
-          TOKEN: ${{ secrets.CI_MERGE_TOKEN }}
+          TOKEN: ${{ steps.coverage-token.outputs.token }}
         run: |
           cp "../build/${GITHUB_REPOSITORY##*/}.coverage.json" coverage.json
           if git diff --quiet -- coverage.json && [[ -n $(git ls-files coverage.json) ]]; then exit 0; fi

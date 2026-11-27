@@ -14,9 +14,6 @@ Shared Linux workflows for FFXIV language packs.
 Each pack defines its triggers and calls the reusable workflows in this repository's `.github/workflows/`.
 Pack identity comes from `pack.json`. The optional `language` input checks an expected language.
 
-Protect `.github/` with CODEOWNERS and required code owner reviews. Dismiss approvals after new commits.
-Keep automatic PR merging disabled.
-
 ## Validation
 
 CorpusValidator checks corpus structure, content and metadata. PackBuilder checks optional ULD layouts against game files.
@@ -34,7 +31,7 @@ Path restrictions, ULD layout validation and PR comments run only for pull reque
 
 Banner variants and dimensions use `metadata/banner-textures.json` and `ffxivgame.ver` from game-sheets.
 The workflow sets `sheets` under `[common]` in its generated `tools.ini`. No installed game is required.
-Changed data files must be regular and non-executable. Workflow changes require code owner approval.
+Changed data files must be regular and non-executable.
 The run summary and PR comment show the results table and a link to the complete JSON report as a ZIP artifact.
 
 ## Publication
@@ -47,14 +44,10 @@ It commits `coverage.json`; this file must not trigger another release. Releases
 | Setting | Use |
 |---|---|
 | `CI_READ_TOKEN` | Reads Tools and game sheets. Required for release; validation can fall back to the workflow token. |
-| `CI_MERGE_TOKEN` | Writes coverage. |
+| `LOCALIZATION_WRITER_CLIENT_ID`, `LOCALIZATION_WRITER_PRIVATE_KEY` | Authenticates the Writer App to update coverage in the calling pack. |
 | `reader-client-id`, `LOCALIZATION_READER_PRIVATE_KEY` | Authenticates the Reader App for Tools and exported sheets. |
 | `writer-client-id`, `LOCALIZATION_WRITER_PRIVATE_KEY` | Authenticates the Writer App for language packs. |
 
-Pass App credentials from the source repository. Install Reader only on Tools and exported game sheets, with read-only contents access.
-Install Writer only on language packs, with contents and pull request write access.
+Set the sync App credentials in the source repository and the release Writer credentials in each pack repository.
 Sync opens a draft PR before the build and marks it ready only after the sync and full pack checks pass. Write tokens cover one pack.
 Fix layouts in `sync/corpus-en` and rerun sync. Pending corpus, exclusion and layout changes are preserved; merge conflicts stop the run.
-
-Treat PR files as data. Run validation code from trusted CI and Tools checkouts, without stored Git credentials.
-Pin external actions by commit. The shared `actions/setup-dalamud` action verifies the runtime archive checksum.
