@@ -139,7 +139,7 @@ jobs:
           git -C pack read-tree --reset -u "$merged_tree"
           git -C pack reset --soft refs/remotes/origin/main
           unexpected=$(git -C pack diff --cached --name-only -- . \
-            ':!corpus/**' ':!inventory-exclusions.json' ':!layouts/**')
+            ':!corpus/**' ':!inventory-exclusions.json')
           if [[ -n "$unexpected" ]]; then
             printf 'Unexpected pending sync paths:\n%s\n' "$unexpected" >&2
             exit 1
@@ -174,7 +174,6 @@ jobs:
           add-paths: |
             corpus/**
             inventory-exclusions.json
-            layouts/**
           commit-message: ${{ matrix.language == 'es-es' && 'Sincroniza el corpus con el original inglés' || 'Sync the corpus with the English source' }}
           title: ${{ matrix.language == 'es-es' && 'Sincroniza el corpus con el original inglés' || 'Sync the corpus with the English source' }}
           body: |
